@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/app-icon.png" width="128" alt="DeepSeek Budget">
+</p>
+
 # DeepSeek Budget
 
 [English](README.md) · **简体中文**
@@ -60,15 +64,6 @@ cargo build --release -p deepseek-budget    # Windows 免安装 exe
 
 引擎（`crates/schedule`）**零 Tauri 依赖**，且从不自己读系统时钟 —— 「现在」永远是参数传进去的。
 这正是每一个峰谷边界都能无头测试的原因。
-
-## 已知局限
-
-1. **时区按固定 UTC 偏移建模。** 对没有夏令时的时区是精确的（包括这个 app 主要面向的 UTC+8），
-   其他时区则是有据可查的近似。峰谷**判定**永远在 UTC 里做，所以状态永远是对的 ——
-   只有显示的本地时间可能差一小时。
-2. **「操作系统真的会在登录时执行登录项」是推断，不是观测。** 登录项的内容、自愈、
-   以及（Windows 上）「那条命令行确实拉得起托盘图标」都验过，但**两台机器都没有注销或重启过**。
-3. **没有单实例保护。** 启动两次就是两个托盘图标。
 
 ## 文档
 

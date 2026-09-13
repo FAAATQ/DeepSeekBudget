@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/app-icon.png" width="128" alt="DeepSeek Budget">
+</p>
+
 # DeepSeek Budget
 
 **English** · [简体中文](README.zh-CN.md)
@@ -66,17 +70,6 @@ cargo build --release -p deepseek-budget    # Windows portable exe
 
 The engine (`crates/schedule`) has **zero Tauri dependencies** and never reads the system clock —
 "now" is always a parameter. That is what makes every peak/off-peak boundary testable headlessly.
-
-## Known limitations
-
-1. **Timezones are modelled as fixed UTC offsets.** Exact where there is no DST (including the
-   UTC+8 audience this is built for); a documented approximation elsewhere. The peak/off-peak
-   *judgement* is always made in UTC, so the state is always correct — only the displayed local
-   time can be an hour off.
-2. **"The OS runs the login item at login" is inferred, not observed.** The entry's content, its
-   self-healing, and (on Windows) that the command line really does start the tray icon were all
-   checked. Neither machine was ever logged out or restarted.
-3. **No single-instance guard.** Two launches means two tray icons.
 
 ## Documentation
 
