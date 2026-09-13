@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "icons": "tauri icon src-tauri/app-icon.png",
+    "icons": "tauri icon src-tauri/app-icon.png && python3 tools/optimize-icons.py",
     "tauri": "tauri"
   },
   "devDependencies": {
