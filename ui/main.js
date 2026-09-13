@@ -199,6 +199,64 @@ function renderProviderStatus(status) {
   $("sync-note").classList.toggle("bad", Boolean(status.notice));
 }
 
+/// Start at login.
+///
+/// What is shown is what the operating system reports — `set_autostart` writes and then reads
+/// back, so a write that failed, or one Windows refuses to honour, shows up here as the state
+/// the user will actually get rather than the one they asked for. `enabled: null` means the
+/// state could not be read at all, which is not "off" and must not be rendered as such.
+function renderAutostart(view) {
+  const button = $("autostart-toggle");
+  const row = button.parentElement;
+  const note = $("autostart-note");
+
+  // A platform with no implementation, or an answer that never arrived: no control is honest,
+  // and a control that silently does nothing is worse than no control.
+  if (!view || view.supported === false) {
+    row.hidden = true;
+    note.hidden = true;
+    return;
+  }
+  row.hidden = false;
+  note.hidden = false;
+
+  const state =
+    view.enabled === true
+      ? t("startAtLoginOn")
+      : view.enabled === false
+        ? t("startAtLoginOff")
+        : t("unknown");
+
+  button.textContent = state;
+  // Kept for the click handler, which needs to know what it is toggling *from*.
+  button.dataset.enabled = view.enabled === true ? "on" : "off";
+  const label = t("startAtLoginLabel", state);
+  button.title = label;
+  button.setAttribute("aria-label", label);
+
+  // Normally the hint explains what was written and where. A refusal or a failure replaces it,
+  // because when either happens the mechanism is not what the user needs to know.
+  const text = view.blocked
+    ? t("startAtLoginBlocked")
+    : view.error
+      ? t("startAtLoginFailed", view.error)
+      : t(platformHintKey());
+  note.textContent = text;
+  note.classList.toggle("bad", Boolean(view.blocked || view.error));
+}
+
+/// Which mechanism the hint should describe. Read from the same `data-platform` the CSS uses,
+/// so the sentence and the styling can never disagree about which platform this is.
+function platformHintKey() {
+  return document.documentElement.dataset.platform === "macos"
+    ? "startAtLoginHintMac"
+    : "startAtLoginHintWindows";
+}
+
+async function refreshAutostart() {
+  renderAutostart(await invoke("get_autostart"));
+}
+
 /// Transient feedback under the buttons — never the persistent state, which the field above
 /// already carries.
 function setSyncNote(text, tone) {
@@ -369,6 +427,22 @@ $("timezone-select").addEventListener("change", async (event) => {
   await refreshSettings();
 });
 
+$("autostart-toggle").addEventListener("click", async () => {
+  const button = $("autostart-toggle");
+  button.disabled = true;
+  try {
+    // The state to move to comes from what is currently *shown*, which came from the OS — not
+    // from a local variable that could have drifted from it.
+    const next = button.dataset.enabled !== "on";
+    renderAutostart(await invoke("set_autostart", { enabled: next }));
+  } catch (error) {
+    $("autostart-note").textContent = t("startAtLoginFailed", messageOf(error));
+    $("autostart-note").classList.add("bad");
+  } finally {
+    button.disabled = false;
+  }
+});
+
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   // Escape closes settings first if it is open, so the panel is not dismissed by accident.
@@ -390,10 +464,15 @@ listen("open-about", () => {
 
 (async function init() {
   try {
+    // Environment first: the start-at-login hint names a platform-specific mechanism, and it
+    // reads the platform off `data-platform`, which this sets.
     await applyEnvironment();
     await refreshSettings();
     await refresh();
     renderProviderStatus(await invoke("get_provider_status"));
+    // Not part of `render()`: it is not derived from the price state, and re-reading the
+    // registry once a minute to redraw a switch nobody touched would be silly.
+    await refreshAutostart();
   } catch (e) {
     $("state-label").textContent = t("unknown");
     const error = $("error");

@@ -29,3 +29,14 @@ window-vibrancy = "0.8"
 # Reads the system UI language. Zero dependencies on native targets — on macOS it calls
 # CFLocaleCopyPreferredLanguages directly.
 sys-locale = "0.3"
+
+# The login item: a value under HKCU\...\CurrentVersion\Run on Windows, a LaunchAgent plist under
+# ~/Library/LaunchAgents on macOS.
+#
+# `winreg` is Windows-only because it `compile_error!`s anywhere else, and it adds nothing to the
+# lock file — `winreg 0.55` is already there via `embed-resource`, which `tauri-build` pulls in.
+# The macOS half needs no dependency at all: `std::fs` plus the home directory Tauri's path
+# resolver already knows. Neither is an HTTP client or a TLS stack, so hard constraint 5 (the
+# Rust tree stays network-free) is untouched.
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"

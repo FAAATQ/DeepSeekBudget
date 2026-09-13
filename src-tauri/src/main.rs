@@ -7,6 +7,7 @@
 //! the app is a tray icon plus a popover created on demand. The scheduling logic lives in
 //! the `apibudget-schedule` crate so it can be tested without any of this.
 
+mod autostart;
 mod core;
 mod popover;
 mod provider;
@@ -33,6 +34,14 @@ fn main() {
             tray::build(app)?;
             tick::spawn(app.handle().clone());
 
+            // Login-item upkeep, in this order: the dev affordance first (so a script can drive
+            // the setting at launch), then the repair pass. Both come *after* the tray exists,
+            // and `reconcile` is infallible by construction — it runs inside `setup`, where an
+            // error or a panic would return from `run()` before the icon was ever shown, and a
+            // price indicator that vanishes is worse than one whose login item went stale.
+            autostart::apply_env(app.handle());
+            autostart::reconcile(app.handle());
+
             // Development affordance, same spirit as APIBUDGET_FAKE_NOW: the popover is
             // created lazily on the first tray click, which is the only moment the native
             // window material gets applied — so without this, checking that the glass call
@@ -56,6 +65,8 @@ fn main() {
             core::apply_provider_config,
             core::reset_provider_config,
             core::hide_popover,
+            autostart::get_autostart,
+            autostart::set_autostart,
         ])
         .on_window_event(|window, event| {
             if window.label() != popover::LABEL {

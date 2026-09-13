@@ -32,6 +32,22 @@ window.I18N = (() => {
       switchCurrencyLabel: (code) => `Currency: ${code}. Click to switch.`,
       settingsNote: (zone) => `Currently ${zone}. "System default" follows this computer.`,
       languageNote: "Changing the language also changes the menu bar tooltip.",
+      startAtLogin: "Start at login",
+      // The chip's visible text *is* the state, so the state is legible without relying on a
+      // colour — the same reason the tray icons carry three distinct shapes and not just three
+      // colours.
+      startAtLoginOn: "On",
+      startAtLoginOff: "Off",
+      startAtLoginLabel: (state) => `Start at login: ${state}. Click to change.`,
+      // The hint says what was written and where, because "start at login" means a different
+      // thing on each platform and only one of them is visible in the place people look.
+      startAtLoginHintWindows:
+        "Added to this user's startup items. Task Manager → Startup lists it, and can turn it off there.",
+      startAtLoginHintMac:
+        "Written as a LaunchAgent for this user. No installer, no administrator rights.",
+      startAtLoginBlocked:
+        "Windows is holding this off — switch it back on in Task Manager → Startup.",
+      startAtLoginFailed: (error) => `Could not change the login item — ${error}`,
       priceData: "Price data",
       checkUpdate: "Check for updates",
       restoreBuiltIn: "Restore built-in",
@@ -61,6 +77,15 @@ window.I18N = (() => {
       switchCurrencyLabel: (code) => `货币：${code}。点击切换。`,
       settingsNote: (zone) => `当前 ${zone}。选择"跟随系统"则使用本机设置。`,
       languageNote: "切换语言也会同时改变菜单栏悬停提示的语言。",
+      startAtLogin: "开机自动启动",
+      startAtLoginOn: "已开启",
+      startAtLoginOff: "已关闭",
+      startAtLoginLabel: (state) => `开机自动启动：${state}。点击切换。`,
+      startAtLoginHintWindows:
+        "写入当前用户的启动项。任务管理器 → 启动 里能看到它，也能在那里关掉。",
+      startAtLoginHintMac: "以当前用户的 LaunchAgent 写入，不需要安装器，也不需要管理员权限。",
+      startAtLoginBlocked: "被 Windows 挡住了 —— 请在 任务管理器 → 启动 里重新打开。",
+      startAtLoginFailed: (error) => `无法修改登录项 —— ${error}`,
       priceData: "价格数据",
       checkUpdate: "检查更新",
       restoreBuiltIn: "恢复内置数据",

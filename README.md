@@ -34,12 +34,13 @@ Two consequences worth the whole app:
 
 | | |
 |---|---|
-| Tests | ✅ **113 passing** (90 engine + 22 app + 1 doc), including bilingual assertions |
+| Tests | ✅ **124 passing** (90 engine + 33 app + 1 doc), including bilingual assertions |
 | macOS menu bar | ✅ Built and run |
 | Windows tray | ✅ Built and run on Windows 11. Four blocking defects found and fixed (see below); acrylic material confirmed |
 | Languages | ✅ Chinese / English, follows the system language by default |
 | Window material | ✅ Native Liquid Glass (`NSGlassEffectView`) on macOS 26; acrylic on Windows |
-| Artifact size | macOS **4.5 MB** single `.app`; Windows a **portable `.exe`**, no installer |
+| Launch at login | ✅ A toggle in the settings panel (off by default). Windows writes `HKCU\…\Run`, macOS writes a LaunchAgent — **no installer, no admin rights**. A portable build that gets moved re-points the entry on its next launch. ⚠️ **"Windows actually runs it at login" is not verified** — see the limitations below |
+| Artifact size | macOS **4.5 MB** single `.app`; Windows a **portable `.exe`**, **measured 6,514,176 bytes = 6.2 MiB**, no installer |
 | Network | ⚠️ **Only one opening, and only when you click it.** The Rust dependency tree contains no HTTP client and no TLS stack; the one `fetch` runs in the webview, gated by a CSP that allows exactly one origin. |
 
 ### Four blocking defects fixed during the Windows port
@@ -190,14 +191,25 @@ It expands on launch and prints a material report to stderr, e.g.
 3. **The Windows tooltip degrades.** Windows caps tray tooltips at 127 UTF-16 characters and does
    not document multi-line support, so Windows gets a compressed three-line form and the popover
    carries the full information.
-4. **No launch-at-login.**
-5. **The glass appearance cannot be verified automatically.** `NSGlassEffectView` does not exist in
+4. **Launch-at-login has an unverified hop.** The feature exists, and on Windows both the written
+   registry value and "that command line really does start the tray icon" were checked — but the
+   machine was **never logged out or restarted**, so "Windows executes it at login" is inference,
+   not observation. The macOS half is further out still: none of its runtime behaviour has been
+   exercised on a Mac.
+5. **A moved portable build is only healed on the next launch.** Both platforms store an absolute
+   path, so moving the app leaves the entry pointing at nothing. Every launch rewrites it — but the
+   login that happens *between* the move and the next launch is simply lost, silently. (On macOS,
+   running straight from the download folder, i.e. App Translocation, is the same situation.)
+6. **The glass appearance cannot be verified automatically.** `NSGlassEffectView` does not exist in
    headless Chrome and `screencapture` is blocked by screen-recording permission. The code path
    *can* be verified (see the material report); whether it looks good can only be judged by eye.
-6. **Config-error messages are English only.** They come from `ScheduleError`'s `Display` and are
+7. **Config-error messages are English only.** They come from `ScheduleError`'s `Display` and are
    not localised. These are developer/config-time errors.
-7. **The language is read once at launch.** Changing the system language needs a restart. Switching
+8. **The language is read once at launch.** Changing the system language needs a restart. Switching
    it in the settings panel takes effect immediately, tooltip included.
+9. **No single-instance guard.** With launch-at-login on, "it is already running and the user
+   double-clicks it again" becomes the normal path rather than a rare one — on Windows that means
+   two tray icons. Still unhandled.
 
 ---
 

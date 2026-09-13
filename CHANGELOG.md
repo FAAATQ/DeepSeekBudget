@@ -1,5 +1,66 @@
 # Changelog
 
+## v0.3.0 — 2026-09-13
+
+**Launch at login.**
+
+### Added
+
+- A toggle in the settings panel, **off by default**. Windows writes
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; macOS writes
+  `~/Library/LaunchAgents/<bundle id>.plist` with `RunAtLoad`. Neither needs an installer or admin
+  rights — which is the whole reason a portable build can have a login item at all.
+- **Self-healing login entries.** Both platforms store an absolute path, and a portable build is
+  defined by being movable — so moving it breaks the entry *silently*: it is still listed in Task
+  Manager, it just never starts anything again. Every launch now runs a `reconcile`: **if the entry
+  exists, rewrite it to point at the current binary.**
+- `APIBUDGET_AUTOSTART=on|off`, a fourth development facility — writes or removes the login entry
+  without opening the GUI and prints the state it read to stderr, so "Windows is blocking it" is
+  something you **ask the app** rather than infer from a screenshot.
+- A third state in the settings panel: **off, and blocked by Windows**. Reported honestly instead of
+  pretending the switch is on, because the switch that overrides it lives in Task Manager.
+- Windows' `StartupApproved\Run` is **read but never written**. It is keyed by value *name*, so
+  deleting the `Run` value does not clear it — and writing it ourselves would overwrite a choice
+  the user made in the OS.
+
+### Changed
+
+- `autostart.rs` is built on **three pure functions** (the Windows command string, the LaunchAgent
+  plist, and the `plan` / `reconcile_action` decision), so all of it is assertable on a machine
+  without macOS.
+- **The official plugin is not used.** `tauri-plugin-autostart` delegates to `auto-launch 0.5.0`,
+  which writes the Windows registry value **without quoting the path**. Measured: the same path run
+  from a `.cmd` without quotes fails with `'C:\...\API' is not recognized as an internal or external
+  command`, and **no process starts at all**. Without arguments it survives on CreateProcess's
+  whole-string fallback; with arguments, the last candidate is "the path with the arguments glued
+  on", which cannot work. This build quotes unconditionally — one shape is easier to reason about
+  than two, and it means `reconcile` only has to compare the path.
+- The dependency tree gains **one `winreg`, already present in the lock file** (pulled in by
+  `embed-resource`). Neither the capabilities nor the CSP changed, so the structural claim that the
+  Rust side has no network stack still holds under the new code.
+
+### Fixed
+
+- The `StartupApproved\Run` rule was initially copied from `auto-launch 0.5.0`, which only checks
+  whether the trailing 8 bytes are zero. A real disabled entry on this machine — `03 00 00 00`
+  followed by an all-zero timestamp — was **read backwards** by that rule: reported as enabled when
+  it was disabled. The rule now reads the state word (`02` on / `03` off), and four real byte
+  layouts from this machine became unit tests.
+
+### Verification
+
+- **124 tests pass** (90 engine + 33 app + 1 doc) — 11 more than the previous release, all of them
+  pure-function assertions.
+- On Windows: the content and quoting of the registry value, self-healing after the exe was moved,
+  honest reporting when Task Manager had disabled the entry, and — by taking the registry value out
+  and running it verbatim — that the command line really does start the tray icon. Two independent
+  methods agreed on where the icon ended up.
+- **Not verified:** that Windows actually executes the entry at login (no logout or restart was
+  performed), and every runtime aspect of the macOS half — no Mac was available, so that code only
+  had to compile.
+
+---
+
 ## v0.2.0 — 2026-09-12
 
 **Windows support, and prices that no longer need a new release.**

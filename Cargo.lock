@@ -59,6 +59,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "window-vibrancy 0.8.0",
+ "winreg",
 ]
 
 [[package]]

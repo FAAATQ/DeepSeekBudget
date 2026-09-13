@@ -64,6 +64,20 @@
           <span data-i18n="timezone">Timezone</span>
           <select id="timezone-select"></select>
         </label>
+
+        <!--
+          Start at login. A `div`, not a `label`: the control is a button, so wrapping it in a
+          label would fold the row's text into the button's accessible name. And neither the
+          state text nor the title carries `data-i18n` — `I18N.apply()` rewrites every such node
+          on each render, and a render happens on every `state-changed` event, i.e. every
+          minute. Both are written from the current state by `renderAutostart` instead.
+        -->
+        <div class="field">
+          <span data-i18n="startAtLogin">Start at login</span>
+          <button class="chip" id="autostart-toggle"></button>
+        </div>
+        <p class="fineprint" id="autostart-note"></p>
+
         <p class="fineprint" id="language-note" data-i18n="languageNote"></p>
         <p class="fineprint" id="settings-note"></p>
 
