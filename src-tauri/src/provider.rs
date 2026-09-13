@@ -16,7 +16,7 @@
 //! Nothing here can leave the app without a config to render. That is what keeps the tray icon
 //! on screen — the rule stated at the top of `core`.
 
-use apibudget_schedule::{Provenance, ProviderConfig, accept, load_bundled};
+use deepseekbudget_schedule::{Provenance, ProviderConfig, accept, load_bundled};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -38,7 +38,7 @@ pub const PROVIDER_FILE: &str = "provider.json";
 /// (`tauri.conf.json`). Change one without the other and the fetch is blocked by the webview,
 /// silently and at runtime. Both files carry this note.
 pub const UPDATE_URL: &str =
-    "https://raw.githubusercontent.com/example/deepseek-budget-config/main/deepseek.json";
+    "https://raw.githubusercontent.com/FAAATQ/deepseek-budget-config/main/deepseek.json";
 
 /// What a config load resolved to.
 pub struct Loaded {
@@ -162,7 +162,7 @@ pub fn placeholder_config() -> ProviderConfig {
         source_url: String::new(),
         verified_at: String::new(),
         default_currency: "USD".to_string(),
-        schedule: apibudget_schedule::ScheduleConfig {
+        schedule: deepseekbudget_schedule::ScheduleConfig {
             reference_utc_offset_minutes: 0,
             reference_label: None,
             weekly: Vec::new(),
@@ -188,7 +188,7 @@ mod tests {
     impl Scratch {
         fn new(name: &str) -> Self {
             let dir = std::env::temp_dir()
-                .join(format!("apibudget-test-{}-{name}", std::process::id()));
+                .join(format!("deepseekbudget-test-{}-{name}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).expect("scratch directory");
             Scratch(dir)
@@ -206,7 +206,7 @@ mod tests {
     }
 
     fn bundled_json() -> String {
-        apibudget_schedule::BUNDLED_DEEPSEEK_JSON.to_string()
+        deepseekbudget_schedule::BUNDLED_DEEPSEEK_JSON.to_string()
     }
 
     #[test]

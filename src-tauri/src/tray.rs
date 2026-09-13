@@ -1,6 +1,6 @@
 //! The menu bar icon and its right-click menu.
 
-use apibudget_schedule::PriceState;
+use deepseekbudget_schedule::PriceState;
 use std::sync::Mutex;
 use tauri::{
     image::Image,
@@ -51,8 +51,8 @@ pub fn apply_icon(tray: &tauri::tray::TrayIcon, state: Option<PriceState>) {
 
 pub fn build(app: &App) -> tauri::Result<()> {
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
-    let about = MenuItem::with_id(app, "about", "About API Budget", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit API Budget", true, None::<&str>)?;
+    let about = MenuItem::with_id(app, "about", "About DeepSeek Budget", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit DeepSeek Budget", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&settings, &about, &separator, &quit])?;
 
@@ -92,7 +92,7 @@ pub fn build(app: &App) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Development affordance, same spirit as `APIBUDGET_FAKE_NOW` and `APIBUDGET_OPEN_POPOVER`:
+/// Development affordance, same spirit as `DEEPSEEKBUDGET_FAKE_NOW` and `DEEPSEEKBUDGET_OPEN_POPOVER`:
 /// print where the shell says this tray icon actually is.
 ///
 /// This exists because guessing the coordinates does not work. A colour search over a taskbar
@@ -100,7 +100,7 @@ pub fn build(app: &App) -> tauri::Result<()> {
 /// same pixels that flatly disagreed with each other, and both were wrong. Asking the app
 /// costs a few lines and is exact, which is what makes the click path testable by script.
 fn report_rect_if_asked(tray: &tauri::tray::TrayIcon) {
-    if std::env::var("APIBUDGET_REPORT_TRAY_RECT").is_err() {
+    if std::env::var("DEEPSEEKBUDGET_REPORT_TRAY_RECT").is_err() {
         return;
     }
 

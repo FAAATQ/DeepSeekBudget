@@ -1,5 +1,5 @@
 [package]
-name = "apibudget-schedule"
+name = "deepseekbudget-schedule"
 description = "Pure scheduling engine: which pricing tier is active right now, and when it next changes."
 version.workspace = true
 edition.workspace = true

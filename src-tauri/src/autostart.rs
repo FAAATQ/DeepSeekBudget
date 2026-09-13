@@ -30,13 +30,13 @@ use tauri::Manager;
 
 use crate::core::APP_NAME;
 
-/// Development affordance, same spirit as `APIBUDGET_FAKE_NOW` and `APIBUDGET_OPEN_POPOVER`:
+/// Development affordance, same spirit as `DEEPSEEKBUDGET_FAKE_NOW` and `DEEPSEEKBUDGET_OPEN_POPOVER`:
 /// apply a login-item setting at launch, so the whole path can be driven — and verified — by a
 /// script instead of by a human clicking the settings panel. Accepts `on`/`off` (also
 /// `1`/`0`, `true`/`false`). Anything else is a typo, and a typo is warned about rather than
 /// obeyed: same rule as a malformed fake clock, because the only person who can set this
 /// variable is a developer.
-pub const AUTOSTART_ENV: &str = "APIBUDGET_AUTOSTART";
+pub const AUTOSTART_ENV: &str = "DEEPSEEKBUDGET_AUTOSTART";
 
 /// The name the login item is filed under on Windows. Task Manager's Startup tab displays this
 /// string verbatim, so it is the human-readable app name rather than the bundle identifier.
@@ -99,8 +99,8 @@ fn quote_arg(argument: &str) -> String {
 
 /// The LaunchAgent plist macOS will load at login.
 ///
-/// `ProgramArguments` holds the executable *inside* the bundle (`…/API Budget.app/Contents/
-/// MacOS/api-budget`), not the `.app` directory — launchd execs the first argument, and a
+/// `ProgramArguments` holds the executable *inside* the bundle (`…/DeepSeek Budget.app/Contents/
+/// MacOS/deepseek-budget`), not the `.app` directory — launchd execs the first argument, and a
 /// directory is not executable. This is also what the official plugin ends up writing.
 ///
 /// Everything interpolated is XML-escaped: a path is user data, and a user whose account is
@@ -572,7 +572,7 @@ pub fn reconcile(app: &AppHandle) {
 /// "the entry is there but Windows has been told not to run it" — is not something the registry
 /// alone answers, and the alternative is reading it off a screenshot of the settings panel.
 /// Asking the app costs one line and is exact, which is the same reason
-/// `APIBUDGET_REPORT_TRAY_RECT` exists.
+/// `DEEPSEEKBUDGET_REPORT_TRAY_RECT` exists.
 pub fn apply_env(app: &AppHandle) {
     let Ok(raw) = std::env::var(AUTOSTART_ENV) else { return };
 
@@ -623,8 +623,8 @@ mod tests {
     /// every one of those places can have a space in it.
     #[test]
     fn a_path_with_spaces_is_quoted() {
-        let value = windows_run_value(Path::new(r"C:\Users\ds\My Apps\api-budget.exe"), &[]);
-        assert_eq!(value, r#""C:\Users\ds\My Apps\api-budget.exe""#);
+        let value = windows_run_value(Path::new(r"C:\Users\ds\My Apps\deepseek-budget.exe"), &[]);
+        assert_eq!(value, r#""C:\Users\ds\My Apps\deepseek-budget.exe""#);
     }
 
     /// A path without spaces is quoted too, so that the recorded string is a function of the
@@ -632,34 +632,34 @@ mod tests {
     /// change the format as well as the path — and `reconcile` would have two reasons to write.
     #[test]
     fn a_plain_path_is_quoted_too() {
-        let value = windows_run_value(Path::new(r"C:\tools\api-budget.exe"), &[]);
-        assert_eq!(value, r#""C:\tools\api-budget.exe""#);
+        let value = windows_run_value(Path::new(r"C:\tools\deepseek-budget.exe"), &[]);
+        assert_eq!(value, r#""C:\tools\deepseek-budget.exe""#);
     }
 
     /// The case the upstream plugin gets wrong: with an unquoted path and an argument, the last
     /// thing Windows tries is the path with the argument glued onto it, which is not a file.
     #[test]
     fn arguments_are_quoted_as_well() {
-        let value = windows_run_value(Path::new(r"C:\My Apps\api-budget.exe"), &["--quiet", "--a b"]);
-        assert_eq!(value, r#""C:\My Apps\api-budget.exe" --quiet "--a b""#);
+        let value = windows_run_value(Path::new(r"C:\My Apps\deepseek-budget.exe"), &["--quiet", "--a b"]);
+        assert_eq!(value, r#""C:\My Apps\deepseek-budget.exe" --quiet "--a b""#);
     }
 
     #[test]
     fn the_plist_runs_at_load_and_names_the_binary_inside_the_bundle() {
         let plist = launch_agent_plist(
-            "com.aicoworks.apibudget",
-            Path::new("/Applications/API Budget.app/Contents/MacOS/api-budget"),
+            "com.aicoworks.deepseekbudget",
+            Path::new("/Applications/DeepSeek Budget.app/Contents/MacOS/deepseek-budget"),
             &[],
         );
 
-        assert!(plist.contains("<key>Label</key>\n  <string>com.aicoworks.apibudget</string>"));
+        assert!(plist.contains("<key>Label</key>\n  <string>com.aicoworks.deepseekbudget</string>"));
         assert!(plist.contains("<key>RunAtLoad</key>\n  <true/>"));
         assert!(plist.contains(
-            "<string>/Applications/API Budget.app/Contents/MacOS/api-budget</string>"
+            "<string>/Applications/DeepSeek Budget.app/Contents/MacOS/deepseek-budget</string>"
         ));
         // The `.app` directory is not executable; pointing launchd at it produces a plist that
         // silently never runs.
-        assert!(!plist.contains("<string>/Applications/API Budget.app</string>"));
+        assert!(!plist.contains("<string>/Applications/DeepSeek Budget.app</string>"));
     }
 
     /// A path is user data. A home directory containing `&` or `<` would otherwise produce a
@@ -668,8 +668,8 @@ mod tests {
     #[test]
     fn the_plist_escapes_xml_in_the_path() {
         let plist = launch_agent_plist(
-            "com.aicoworks.apibudget",
-            Path::new("/Users/A&B <home>/API Budget.app/Contents/MacOS/api-budget"),
+            "com.aicoworks.deepseekbudget",
+            Path::new("/Users/A&B <home>/DeepSeek Budget.app/Contents/MacOS/deepseek-budget"),
             &[],
         );
 
@@ -679,10 +679,10 @@ mod tests {
 
     #[test]
     fn the_launch_agent_lives_where_macos_looks_for_it() {
-        let path = launch_agent_path(Path::new("/Users/ds"), "com.aicoworks.apibudget");
+        let path = launch_agent_path(Path::new("/Users/ds"), "com.aicoworks.deepseekbudget");
         assert_eq!(
             path,
-            Path::new("/Users/ds/Library/LaunchAgents/com.aicoworks.apibudget.plist")
+            Path::new("/Users/ds/Library/LaunchAgents/com.aicoworks.deepseekbudget.plist")
         );
     }
 
@@ -700,7 +700,7 @@ mod tests {
     /// still get a registry write on every single boot.
     #[test]
     fn an_entry_that_already_matches_is_left_alone() {
-        let value = windows_run_value(Path::new(r"C:\My Apps\api-budget.exe"), &[]);
+        let value = windows_run_value(Path::new(r"C:\My Apps\deepseek-budget.exe"), &[]);
         assert_eq!(plan(Some(&value), Some(&value)), Action::Nothing);
     }
 

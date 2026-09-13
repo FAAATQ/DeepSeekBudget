@@ -1,11 +1,11 @@
 // Release builds must not open a console window on Windows.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-//! API Budget — see the price, know when to wait.
+//! DeepSeek Budget — see the price, know when to wait.
 //!
 //! A menu bar indicator for DeepSeek's peak/off-peak API pricing. There is no main window:
 //! the app is a tray icon plus a popover created on demand. The scheduling logic lives in
-//! the `apibudget-schedule` crate so it can be tested without any of this.
+//! the `deepseekbudget-schedule` crate so it can be tested without any of this.
 
 mod autostart;
 mod core;
@@ -42,7 +42,7 @@ fn main() {
             autostart::apply_env(app.handle());
             autostart::reconcile(app.handle());
 
-            // Development affordance, same spirit as APIBUDGET_FAKE_NOW: the popover is
+            // Development affordance, same spirit as DEEPSEEKBUDGET_FAKE_NOW: the popover is
             // created lazily on the first tray click, which is the only moment the native
             // window material gets applied — so without this, checking that the glass call
             // succeeds (and that the CSS fallback flag is set correctly) would require a
@@ -89,5 +89,5 @@ fn main() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("API Budget failed to start");
+        .expect("DeepSeek Budget failed to start");
 }

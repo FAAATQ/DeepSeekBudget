@@ -1,5 +1,69 @@
 # Changelog
 
+## v0.3.1 — 2026-09-13
+
+**Renamed to DeepSeek Budget, and the two bugs that only macOS had.**
+
+### Changed
+
+- **The product is now called DeepSeek Budget** (was API Budget). Package names
+  (`api-budget` → `deepseek-budget`, `apibudget-schedule` → `deepseekbudget-schedule`),
+  `productName`, the bundle identifier (`com.aicoworks.apibudget` → `.deepseekbudget`), the binary
+  name, and the environment-variable prefix for all four development facilities
+  (`APIBUDGET_*` → `DEEPSEEKBUDGET_*`) moved with it. Entries above keep the names they shipped
+  under.
+- **The identifier change orphaned the old login item.** Both platforms key the entry by identifier,
+  so an existing `com.aicoworks.apibudget.plist` is now simply never looked at again. This was
+  written down as a coupling in the architecture notes long before it was ever hit; this rename was
+  the first time it was hit for real.
+
+### Fixed
+
+- **A square outline around all four corners on macOS.** The panel was correctly rounded, but the
+  window's rectangular bounds still drew *outside* the curve — invisible along the straight edges,
+  visible only at the corners. `apply_liquid_glass` never passed a `content_view`, so
+  `window-vibrancy`'s `move_primary_content_view` returned on its first line and skipped that
+  crate's **only** `apply_corner_radius_layer` call (the one that sets `masksToBounds`). The fix
+  sets `cornerRadius` + `masksToBounds` on the window's view — **clipping only, the material is
+  untouched.** It costs one new direct dependency (`objc2`), at a version already in the lock file,
+  so the tree gains nothing.
+- **The panel opened in the middle of the screen on macOS.** Two bugs stacked. First, `tray.rect()`
+  returns a **zero-height** rect on macOS 26 (`x=0 y=2100 w=82 h=0`); the old code logged one line
+  and left the window wherever it was created — which is the middle of the screen, and **a menu bar
+  app whose panel opens in the middle of the screen reads as an unfinished feature, not as a
+  positioning failure.** Second, `monitor_from_point` compares against `CGDisplayBounds`, which is
+  in **logical points**, while the tray rect is in **physical pixels** — so on a 2× display every
+  coordinate was doubled. Single-monitor setups passed by luck.
+
+### Verification
+
+- **127 tests pass** (90 engine + 36 app + 1 doc) — 3 more than the previous release, all
+  pure-function assertions on the fallback origin.
+- **The corner fix was measured by subtracting two screenshots at the same reported position**: the
+  difference region *is* a right-angled frame, 1.22% of pixels, meeting at the window's rectangle
+  corners. Worth doing this way because the artifact is **background-dependent** — nearly invisible
+  over a dark region, obvious over a light one — so "I can't see it" and "it's fixed" are not the
+  same statement.
+- **macOS launch-at-login exercised on real hardware for the first time**: `launchctl bootstrap`
+  loaded it (`state = running`, `runs = 1`), `reconcile` was confirmed **not** to create an entry
+  when none exists, and moving the app made the entry heal byte-for-byte.
+- **`screencapture` permission came through**, so the menu bar icon and the Liquid Glass popover
+  were photographed for the first time. **This retires the project's claim that Windows is the
+  easier platform to verify** — that was only ever true because macOS was unphotographable.
+- **Still not verified:** the portable `.exe`'s WebView2 dependency on a clean machine, and — on
+  both platforms — that the OS actually runs the login entry at login. No logout or restart was
+  performed. On macOS what remains is launchd's scheduling rather than this code, since
+  `launchctl bootstrap` is the same operation launchd performs at login.
+
+### Known limitation, stated plainly
+
+- The macOS positioning fix is a **fallback, not a repair**. With no usable status-item frame, the
+  panel anchors to the right end of the menu bar — it no longer drifts to the middle, but it does
+  not promise to sit under the icon that was clicked. The real fix needs `ns_status_item()`, which
+  is upstream.
+
+---
+
 ## v0.3.0 — 2026-09-13
 
 **Launch at login.**

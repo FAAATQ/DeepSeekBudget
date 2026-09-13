@@ -383,7 +383,7 @@ impl Clock for FixedClock {
 }
 
 /// Environment variable that pins "now" for development and demos.
-pub const FAKE_NOW_ENV: &str = "APIBUDGET_FAKE_NOW";
+pub const FAKE_NOW_ENV: &str = "DEEPSEEKBUDGET_FAKE_NOW";
 
 /// Parse a pinned instant. Blank or whitespace means "no pin" (`Ok(None)`).
 ///

@@ -594,6 +594,6 @@ fn fake_now_parsing_accepts_rfc3339_and_normalises_to_utc() {
 fn fake_now_parsing_rejects_nonsense_with_a_useful_message() {
     let err = parse_fake_now("yesterday afternoon").unwrap_err();
     let message = err.to_string();
-    assert!(message.contains("APIBUDGET_FAKE_NOW"));
+    assert!(message.contains("DEEPSEEKBUDGET_FAKE_NOW"));
     assert!(message.contains("RFC 3339"));
 }

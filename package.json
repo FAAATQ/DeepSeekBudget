@@ -1,5 +1,5 @@
 {
-  "name": "api-budget",
+  "name": "deepseek-budget",
   "private": true,
   "version": "0.1.0",
   "description": "See the price. Know when to wait. A menu bar indicator for DeepSeek's peak/off-peak API pricing.",

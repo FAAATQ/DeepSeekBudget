@@ -6,7 +6,7 @@
 //! a stale icon and a timer that over-runs by hours. The cap costs one trivial recompute per
 //! minute, and the tray itself is only touched when the rendered result actually changes.
 
-use apibudget_schedule::StateView;
+use deepseekbudget_schedule::StateView;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -96,7 +96,7 @@ fn sleep_for(view: &StateView) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apibudget_schedule::{build_view, ViewInput};
+    use deepseekbudget_schedule::{build_view, ViewInput};
 
     fn utc(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> chrono::DateTime<chrono::Utc> {
         use chrono::TimeZone;
@@ -104,8 +104,8 @@ mod tests {
     }
 
     fn view_at(now: chrono::DateTime<chrono::Utc>) -> StateView {
-        let config = apibudget_schedule::load_bundled().unwrap();
-        let schedule = apibudget_schedule::bundled_schedule().unwrap();
+        let config = deepseekbudget_schedule::load_bundled().unwrap();
+        let schedule = deepseekbudget_schedule::bundled_schedule().unwrap();
         build_view(ViewInput {
             config: &config,
             schedule: Some(&schedule),
@@ -114,8 +114,8 @@ mod tests {
             display_offset_minutes: 480,
             display_zone_label: "Asia/Shanghai".to_string(),
             currency: "CNY".to_string(),
-            locale: apibudget_schedule::Locale::Zh,
-            provenance: apibudget_schedule::Provenance::BuiltIn,
+            locale: deepseekbudget_schedule::Locale::Zh,
+            provenance: deepseekbudget_schedule::Provenance::BuiltIn,
         })
     }
 

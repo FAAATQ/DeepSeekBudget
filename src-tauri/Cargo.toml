@@ -1,5 +1,5 @@
 [package]
-name = "api-budget"
+name = "deepseek-budget"
 description = "See the price. Know when to wait. A menu bar indicator for DeepSeek's peak/off-peak API pricing."
 version.workspace = true
 edition.workspace = true
@@ -15,7 +15,7 @@ tauri-build = { version = "2", features = [] }
 # documented App Store blocker, which is irrelevant for a tray utility that ships unsigned.
 tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
 
-apibudget-schedule = { path = "../crates/schedule" }
+deepseekbudget-schedule = { path = "../crates/schedule" }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -40,3 +40,11 @@ sys-locale = "0.3"
 # Rust tree stays network-free) is untouched.
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
+
+# Two AppKit calls `window-vibrancy` does not make for us: clipping the window's content to the
+# card's rounded corner (see `popover::clip_to_card_radius`). Its glass view is given a corner
+# radius but nothing in the chain ever sets `masksToBounds`, so the window's rectangular edge
+# keeps being drawn outside the corner. Same version Tauri already pulls in (0.6.4), so this adds
+# no crate to the lock file — only a direct edge to one that is already there.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"

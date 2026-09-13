@@ -1,13 +1,13 @@
 //! Print exactly what the tray tooltip and the popover would show at a given instant.
 //!
-//! This is the offline half of the time-travel workflow. `APIBUDGET_FAKE_NOW` shows you the
+//! This is the offline half of the time-travel workflow. `DEEPSEEKBUDGET_FAKE_NOW` shows you the
 //! real tray, which is the honest check but needs a GUI and a click; this prints the same
 //! content as text, so the wording, the countdowns and the price rounding can be eyeballed —
 //! or diffed in a test — without launching anything.
 //!
 //! ```text
-//! cargo run -p apibudget-schedule --example view -- 2026-09-14T01:30:00Z
-//! cargo run -p apibudget-schedule --example view -- 2026-09-14T05:00:00Z 480 USD
+//! cargo run -p deepseekbudget-schedule --example view -- 2026-09-14T01:30:00Z
+//! cargo run -p deepseekbudget-schedule --example view -- 2026-09-14T05:00:00Z 480 USD
 //! ```
 //!
 //! Arguments:
@@ -19,7 +19,7 @@
 //! `--synced` labels the figures as coming from a fetched copy rather than the binary.
 //! `lang` is `zh` or `en` (anything else falls back to English).
 
-use apibudget_schedule::{
+use deepseekbudget_schedule::{
     build_view, display::render_offset, load_bundled, tooltip_lines, CompiledSchedule, Locale,
     Provenance, ViewInput,
 };

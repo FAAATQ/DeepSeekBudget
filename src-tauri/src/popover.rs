@@ -22,7 +22,7 @@ pub const LABEL: &str = "popover";
 
 /// Set this to open the popover at launch instead of waiting for a tray click. Development
 /// only — see the note in `main.rs`.
-pub const OPEN_POPOVER_ENV: &str = "APIBUDGET_OPEN_POPOVER";
+pub const OPEN_POPOVER_ENV: &str = "DEEPSEEKBUDGET_OPEN_POPOVER";
 
 /// Roughly the width the design settled on: wide enough for the day list and the price
 /// table, narrow enough to read as a menu bar accessory rather than a window.
@@ -89,6 +89,53 @@ fn apply_window_material(window: &WebviewWindow) -> bool {
     }
 }
 
+/// Clip everything this window draws to the card's rounded corner.
+///
+/// The window is a **rectangle**; the corner is drawn by the native material, which is given
+/// `CARD_RADIUS` as its `cornerRadius`. Nothing in that chain ever sets `masksToBounds`, though,
+/// so the rectangle's own edge is still painted *outside* the rounded corner: a hairline frame
+/// whose square corners stick out at all four of them. It is easy to miss — it only shows where
+/// the panel happens to sit over something bright, which is why it reads as "sometimes there".
+///
+/// `window-vibrancy` would have handled it, but only along the path we do not take:
+/// `move_primary_content_view` returns early when `LiquidGlassOptions::content_view` is unset,
+/// and that early return is what skips the crate's only `apply_corner_radius_layer` call — the
+/// one that would have masked the webview. Clipping the view the glass is hung on settles it for
+/// every layer at once, and costs the material nothing: a material clipped to a rounded shape is
+/// what it was always meant to be.
+///
+/// Best-effort, like everything else on this path. A window that cannot be clipped still shows a
+/// price.
+#[cfg(target_os = "macos")]
+fn clip_to_card_radius(window: &WebviewWindow) {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyObject, Bool};
+
+    let Ok(view) = window.ns_view() else { return };
+    let view = view.cast::<AnyObject>();
+    if view.is_null() {
+        return;
+    }
+
+    // Safety: `ns_view()` hands back the view Tauri installed for this window, and both
+    // selectors below are plain AppKit/CALayer property setters on it.
+    unsafe {
+        let mut layer: *mut AnyObject = msg_send![view, layer];
+        if layer.is_null() {
+            let _: () = msg_send![view, setWantsLayer: Bool::YES];
+            layer = msg_send![view, layer];
+        }
+        if layer.is_null() {
+            return;
+        }
+        let _: () = msg_send![layer, setCornerRadius: CARD_RADIUS];
+        let _: () = msg_send![layer, setMasksToBounds: Bool::YES];
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn clip_to_card_radius(_window: &WebviewWindow) {}
+
 fn ensure(app: &AppHandle) -> Option<WebviewWindow> {
     if let Some(window) = app.get_webview_window(LABEL) {
         return Some(window);
@@ -110,6 +157,7 @@ fn ensure(app: &AppHandle) -> Option<WebviewWindow> {
         .ok()?;
 
     let glass = apply_window_material(&window);
+    clip_to_card_radius(&window);
     if let Some(core) = app.try_state::<Mutex<AppCore>>() {
         match core.lock() {
             Ok(mut core) => core.glass_applied = glass,
@@ -151,7 +199,7 @@ const REOPEN_GRACE: Duration = Duration::from_millis(250);
 ///
 /// The focus-loss handler doubles as "click anywhere else and the panel goes away" — which
 /// only means anything if the panel had focus to lose. On Windows a panel shown for a reason
-/// other than a user gesture (the `APIBUDGET_OPEN_POPOVER` launch path, for example) can be
+/// other than a user gesture (the `DEEPSEEKBUDGET_OPEN_POPOVER` launch path, for example) can be
 /// refused focus by the foreground lock, and then the first `Focused(false)` closes a panel
 /// nobody ever saw. Measured on Windows: the panel was shown and gone again inside 700ms.
 ///
@@ -215,7 +263,7 @@ pub fn show_at_tray(app: &AppHandle) {
     report_rect_if_asked(&window);
 }
 
-/// Development affordance, sharing `APIBUDGET_REPORT_TRAY_RECT` with the tray: print where the
+/// Development affordance, sharing `DEEPSEEKBUDGET_REPORT_TRAY_RECT` with the tray: print where the
 /// popover actually ended up.
 ///
 /// This exists for the same reason the tray counterpart does. Verifying the popover's rounded
@@ -223,7 +271,7 @@ pub fn show_at_tray(app: &AppHandle) {
 /// that look like a finding but are only a wrong guess about where the window is — which is
 /// exactly what happened the first time this was measured by hand.
 fn report_rect_if_asked(window: &WebviewWindow) {
-    if std::env::var("APIBUDGET_REPORT_TRAY_RECT").is_err() {
+    if std::env::var("DEEPSEEKBUDGET_REPORT_TRAY_RECT").is_err() {
         return;
     }
 
@@ -325,6 +373,22 @@ pub fn panel_origin(icon: PixelRect, work: PixelRect, panel: (i32, i32), gap: i3
     (x, y)
 }
 
+/// Where to put the panel when the tray icon's rect cannot be used.
+///
+/// Deliberately not a guess at the icon: with no usable rect there is no honest way to find it.
+/// This anchors to the end of the menu bar instead, which is where status items live — so the
+/// panel opens somewhere the user is already looking. The alternative it replaces is "leave the
+/// window where it is", and what that actually produced was a menu bar panel in the middle of the
+/// screen, pointing at nothing.
+fn fallback_origin(work: PixelRect, panel: (i32, i32), gap: i32) -> (i32, i32) {
+    let (panel_w, panel_h) = panel;
+    let min_x = work.x + gap;
+    let x = (work.right() - panel_w - gap).max(min_x);
+    // The work area's top edge is already below the menu bar, so one gap is enough.
+    let y = (work.y + gap).min((work.bottom() - panel_h).max(work.y));
+    (x, y)
+}
+
 fn position_under(window: &WebviewWindow, rect: Rect) {
     let (Position::Physical(icon), Size::Physical(size)) = (rect.position, rect.size) else {
         return;
@@ -340,18 +404,37 @@ fn position_under(window: &WebviewWindow, rect: Rect) {
     let panel = ((WIDTH * scale) as i32, (HEIGHT * scale) as i32);
     let gap = (GAP * scale) as i32;
 
-    // Ask which monitor the *icon* is on, rather than which one the window is on. The popover
-    // is still hidden the first time it is positioned, so `current_monitor()` would be
-    // guessing — and on a multi-monitor desk it would guess wrong and anchor the panel to the
-    // wrong screen's work area.
+    // **A zero-height rect is not a position.** macOS 26 hands back the status item's window as
+    // `{{0, 0}, {41, 0}}`, and feeding that centre to the monitor lookup below does not fail
+    // loudly — it fails as "no monitor contains (41, 2100)", which used to mean the panel was
+    // never positioned at all and simply stayed wherever its window was created. A menu bar
+    // panel that opens in the middle of the screen is what that looks like from the outside.
+    //
+    // Width *and* height are both checked: the height is the one that goes to zero here, but a
+    // rect with no width is no more of a position.
+    let icon_is_usable = icon.width > 0 && icon.height > 0;
+
+    // Ask which monitor the *icon* is on, rather than which one the window is on: the popover is
+    // still hidden the first time it is positioned, so `current_monitor()` would be guessing.
+    //
+    // The units are the trap. `monitor_from_point` is documented as taking a point, and tao's
+    // macOS implementation tests it against `CGDisplayBounds` — which is in **logical points** —
+    // while a tray rect arrives in **physical pixels**. Passing one as the other doubles every
+    // coordinate on a 2x display: harmless on a single screen by luck, wrong screen on a desk
+    // with two. Convert before asking.
     let centre = (
-        icon.x as f64 + icon.width as f64 / 2.0,
-        icon.y as f64 + icon.height as f64 / 2.0,
+        (icon.x as f64 + icon.width as f64 / 2.0) / scale,
+        (icon.y as f64 + icon.height as f64 / 2.0) / scale,
     );
-    let Ok(Some(monitor)) = window.monitor_from_point(centre.0, centre.1) else {
-        // No monitor could be resolved. Leaving the window where it is beats inventing a
-        // position, and the icon is still there either way.
-        eprintln!("{APP_NAME}: could not resolve the monitor under the tray icon");
+    let monitor = icon_is_usable
+        .then(|| window.monitor_from_point(centre.0, centre.1).ok().flatten())
+        .flatten()
+        // The icon's rect was unusable, or it resolved to nothing. Fall back to the monitor the
+        // window is on, then to the primary one, so there is always *somewhere* to anchor.
+        .or_else(|| window.current_monitor().ok().flatten())
+        .or_else(|| window.primary_monitor().ok().flatten());
+    let Some(monitor) = monitor else {
+        eprintln!("{APP_NAME}: no monitor to anchor the popover to");
         return;
     };
 
@@ -365,7 +448,12 @@ fn position_under(window: &WebviewWindow, rect: Rect) {
         height: area.size.height as i32,
     };
 
-    let (x, y) = panel_origin(icon, work, panel, gap);
+    let (x, y) = if icon_is_usable {
+        panel_origin(icon, work, panel, gap)
+    } else {
+        eprintln!("{APP_NAME}: the tray rect is not a position — anchoring to the menu bar's end");
+        fallback_origin(work, panel, gap)
+    };
     let _ = window.set_position(PhysicalPosition::new(x, y));
 }
 
@@ -373,7 +461,7 @@ fn position_under(window: &WebviewWindow, rect: Rect) {
 mod geometry_tests {
     // Aliased for readability in the fixtures below. The type itself is `PixelRect` because
     // `Rect` is already taken by tauri in the parent module.
-    use super::{panel_origin, PixelRect as Rect};
+    use super::{fallback_origin, panel_origin, PixelRect as Rect};
 
     /// The panel size measured on Windows at 105% scaling.
     const PANEL: (i32, i32) = (336, 479);
@@ -480,5 +568,50 @@ mod geometry_tests {
         let (_, y) = panel_origin(icon, work, PANEL, GAP);
 
         assert_eq!(y, work.y, "expected the panel to be pinned to the top of the work area");
+    }
+
+    /// What macOS 26 actually reports for the status item: `{{0, 0}, {41, 0}}` in points, which
+    /// as physical pixels is `x=0 y=2100 w=82 h=0`. The height is zero, and a rect with no height
+    /// is not a position — this is the shape that used to send the panel to the middle of the
+    /// screen by never positioning it at all.
+    fn degenerate_menu_bar_rect() -> Rect {
+        Rect { x: 0, y: 2100, width: 82, height: 0 }
+    }
+
+    /// The fallback must land on the menu bar's side of the screen — the end status items are
+    /// drawn at — and inside the work area.
+    #[test]
+    fn an_unusable_tray_rect_anchors_to_the_menu_bars_end() {
+        let work = Rect { x: 0, y: 25, width: 1512, height: 900 };
+        let (x, y) = fallback_origin(work, PANEL, GAP);
+
+        assert_eq!(
+            x + PANEL.0,
+            work.right() - GAP,
+            "panel should sit against the right end of the menu bar"
+        );
+        assert!(x >= work.x, "panel fell off the left of the work area: x={x}");
+        assert_eq!(y, work.y + GAP, "panel should hang just below the menu bar");
+    }
+
+    /// The shape that matters is the zero height, not the values around it: the same rect with a
+    /// real height is a position and must keep going through `panel_origin`.
+    #[test]
+    fn a_tray_rect_with_no_height_is_the_one_that_is_refused() {
+        let degenerate = degenerate_menu_bar_rect();
+        let usable = Rect { height: 22, ..degenerate };
+
+        assert!(!(degenerate.width > 0 && degenerate.height > 0));
+        assert!(usable.width > 0 && usable.height > 0);
+    }
+
+    /// A work area too small for the panel must still not push it off the top.
+    #[test]
+    fn the_fallback_stays_inside_a_short_work_area() {
+        let work = Rect { x: 0, y: 25, width: 320, height: 100 };
+        let (x, y) = fallback_origin(work, PANEL, GAP);
+
+        assert!(x >= work.x, "panel fell off the left: x={x}");
+        assert!(y >= work.y, "panel fell off the top: y={y}");
     }
 }

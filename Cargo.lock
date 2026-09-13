@@ -48,30 +48,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
-name = "api-budget"
-version = "0.1.0"
-dependencies = [
- "apibudget-schedule",
- "chrono",
- "serde",
- "serde_json",
- "sys-locale",
- "tauri",
- "tauri-build",
- "window-vibrancy 0.8.0",
- "winreg",
-]
-
-[[package]]
-name = "apibudget-schedule"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "atk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -542,6 +518,31 @@ dependencies = [
  "libc",
  "libdbus-sys",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "deepseek-budget"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "deepseekbudget-schedule",
+ "objc2",
+ "serde",
+ "serde_json",
+ "sys-locale",
+ "tauri",
+ "tauri-build",
+ "window-vibrancy 0.8.0",
+ "winreg",
+]
+
+[[package]]
+name = "deepseekbudget-schedule"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

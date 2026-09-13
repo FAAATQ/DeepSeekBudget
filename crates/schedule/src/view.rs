@@ -537,7 +537,7 @@ pub fn tooltip_lines(view: &StateView, compact: bool) -> Vec<String> {
     });
 
     if compact {
-        let mut lines = vec![format!("API Budget · {state_line}")];
+        let mut lines = vec![format!("DeepSeek Budget · {state_line}")];
         if let Some(line) = price_line {
             lines.push(line);
         }
@@ -546,7 +546,7 @@ pub fn tooltip_lines(view: &StateView, compact: bool) -> Vec<String> {
         }
         lines
     } else {
-        let mut lines = vec!["API Budget".to_string()];
+        let mut lines = vec!["DeepSeek Budget".to_string()];
         lines.push(match headline {
             Some(m) => format!("{} · {}", view.provider_name, m.label),
             None => view.provider_name.clone(),
@@ -802,7 +802,7 @@ mod tests {
         assert_eq!(
             tooltip_lines(&view, false),
             vec![
-                "API Budget",
+                "DeepSeek Budget",
                 "DeepSeek · V4.1 Flash",
                 "高峰",
                 "¥8 / 百万 tokens 输出",
@@ -812,7 +812,7 @@ mod tests {
         // The compressed Windows form too — it has its own phrasing.
         assert_eq!(
             tooltip_lines(&view, true),
-            vec!["API Budget · 高峰", "¥8 / 百万 tokens 输出", "下次空闲 今天 12:00"]
+            vec!["DeepSeek Budget · 高峰", "¥8 / 百万 tokens 输出", "下次空闲 今天 12:00"]
         );
     }
 
@@ -928,7 +928,7 @@ mod tests {
         assert_eq!(
             lines,
             vec![
-                "API Budget",
+                "DeepSeek Budget",
                 "DeepSeek · V4.1 Flash",
                 "Peak",
                 "¥8 / 1M output",
@@ -944,7 +944,7 @@ mod tests {
         assert_eq!(
             lines,
             vec![
-                "API Budget · Peak",
+                "DeepSeek Budget · Peak",
                 "¥8 / 1M output",
                 "Next Off-Peak Today 12:00",
             ]

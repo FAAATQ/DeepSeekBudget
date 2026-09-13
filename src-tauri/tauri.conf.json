@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "API Budget",
+  "productName": "DeepSeek Budget",
   "version": "0.1.0",
-  "identifier": "com.aicoworks.apibudget",
+  "identifier": "com.aicoworks.deepseekbudget",
   "build": {
     "frontendDist": "../ui"
   },

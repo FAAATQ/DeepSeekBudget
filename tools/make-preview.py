@@ -15,7 +15,7 @@ Usage:
 
 Pair it with the Rust example that emits the payload:
 
-    cargo run -q -p apibudget-schedule --example view -- --json 2026-09-14T02:00:00Z 480 CNY \\
+    cargo run -q -p deepseekbudget-schedule --example view -- --json 2026-09-14T02:00:00Z 480 CNY \\
         > /tmp/peak.json
     python3 tools/make-preview.py /tmp/peak.json /tmp/peak.html
 
@@ -36,6 +36,19 @@ def read(relative_path):
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, relative_path), encoding="utf-8") as handle:
         return handle.read()
+
+
+def host_platform():
+    """The `platform` the frontend would be told on this machine.
+
+    The start-at-login row names a different mechanism on each platform, and the two sentences
+    are different lengths — a hardcoded value previews text this machine never renders.
+    """
+    if sys.platform == "darwin":
+        return "macos"
+    if sys.platform.startswith("win"):
+        return "windows"
+    return "linux"
 
 
 def force_dark(css):
@@ -118,7 +131,7 @@ def main():
 <html lang="en" data-glass="off">
 <head>
 <meta charset="utf-8" />
-<title>API Budget preview</title>
+<title>DeepSeek Budget preview</title>
 <style>
 {css}
 /* Preview only: pin the page to the real popover size so the screenshot matches. */
@@ -131,13 +144,15 @@ html, body {{ width: 320px; height: 470px; }}
 // Minimal stand-in for the Tauri bridge: the only calls the UI makes.
 const VIEW = {json.dumps(view)};
 const SETTINGS = {json.dumps(stub_settings(view))};
-const ENVIRONMENT = {{ glass: false }};
+const ENVIRONMENT = {{ glass: false, platform: "{host_platform()}" }};
+const AUTOSTART = {{ enabled: false, blocked: false, supported: true, error: null }};
 window.__TAURI__ = {{
   core: {{
     invoke: async (cmd) => {{
       if (cmd === "get_view") return VIEW;
       if (cmd === "get_settings") return SETTINGS;
       if (cmd === "get_environment") return ENVIRONMENT;
+      if (cmd === "get_autostart") return AUTOSTART;
       return null;
     }},
   }},

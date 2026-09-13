@@ -1,4 +1,4 @@
-//! API Budget's scheduling engine.
+//! DeepSeek Budget's scheduling engine.
 //!
 //! Answers two questions and nothing else:
 //!
@@ -9,13 +9,13 @@
 //! the peak/off-peak boundary testable instead of something you verify by waiting.
 //!
 //! ```
-//! let schedule = apibudget_schedule::bundled_schedule().unwrap();
+//! let schedule = deepseekbudget_schedule::bundled_schedule().unwrap();
 //! let now = chrono::DateTime::parse_from_rfc3339("2026-09-14T02:00:00Z")
 //!     .unwrap()
 //!     .with_timezone(&chrono::Utc);
 //! assert_eq!(
 //!     schedule.state_at(now),
-//!     apibudget_schedule::PriceState::Peak,
+//!     deepseekbudget_schedule::PriceState::Peak,
 //! );
 //! ```
 

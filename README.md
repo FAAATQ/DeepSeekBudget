@@ -1,4 +1,4 @@
-# API Budget
+# DeepSeek Budget
 
 > **See the price. Know when to wait.**
 > One glance tells you whether DeepSeek's API is worth using right now.
@@ -34,12 +34,12 @@ Two consequences worth the whole app:
 
 | | |
 |---|---|
-| Tests | ✅ **124 passing** (90 engine + 33 app + 1 doc), including bilingual assertions |
-| macOS menu bar | ✅ Built and run |
+| Tests | ✅ **127 passing** (90 engine + 36 app + 1 doc), including bilingual assertions |
+| macOS menu bar | ✅ Built, run, and **photographed** — both the menu bar icon and the Liquid Glass popover were captured with `screencapture` (2026-09-13). Two macOS-only defects found and fixed (see below) |
 | Windows tray | ✅ Built and run on Windows 11. Four blocking defects found and fixed (see below); acrylic material confirmed |
 | Languages | ✅ Chinese / English, follows the system language by default |
 | Window material | ✅ Native Liquid Glass (`NSGlassEffectView`) on macOS 26; acrylic on Windows |
-| Launch at login | ✅ A toggle in the settings panel (off by default). Windows writes `HKCU\…\Run`, macOS writes a LaunchAgent — **no installer, no admin rights**. A portable build that gets moved re-points the entry on its next launch. ⚠️ **"Windows actually runs it at login" is not verified** — see the limitations below |
+| Launch at login | ✅ A toggle in the settings panel (off by default). Windows writes `HKCU\…\Run`, macOS writes a LaunchAgent — **no installer, no admin rights**. A portable build that gets moved re-points the entry on its next launch. On macOS this was exercised for real: `launchctl bootstrap` loaded it (`state = running`, `runs = 1`) and moving the app made the entry heal **byte-for-byte**. ⚠️ **"the OS runs it at login" is still inference** — see the limitations below |
 | Artifact size | macOS **4.5 MB** single `.app`; Windows a **portable `.exe`**, **measured 6,514,176 bytes = 6.2 MiB**, no installer |
 | Network | ⚠️ **Only one opening, and only when you click it.** The Rust dependency tree contains no HTTP client and no TLS stack; the one `fetch` runs in the webview, gated by a CSP that allows exactly one origin. |
 
@@ -68,6 +68,28 @@ into **"unreachable"**. The entire price-sync feature was invisible to users —
 control does not read as a bug, it reads as a feature the app does not have.**
 
 Details: [`docs/windows.md`](docs/windows.md).
+
+### Two defects that only macOS had
+
+The macOS half was written *after* Windows and looked like the easier target. Both of these are
+worth reading because **each one masked the other**:
+
+| Defect | Symptom (measured) | Root cause |
+|---|---|---|
+| A square outline outside all four corners | The panel is rounded, but the window's rectangular bounds still drew *outside* the curve — hidden along the straight edges, visible only where the corners cut in | `apply_liquid_glass` never passed a `content_view`, so `window-vibrancy`'s `move_primary_content_view` returned on its first line — skipping that crate's **only** `apply_corner_radius_layer` call, which is what sets `masksToBounds` |
+| The panel opened in the middle of the screen | `tray.rect()` returns a **zero-height** rect on macOS 26 — `x=0 y=2100 w=82 h=0`, i.e. `{{0,0},{41,0}}` in AppKit terms. That is not a position | Two bugs stacked: the degenerate rect, *and* `monitor_from_point` comparing it against `CGDisplayBounds` (**logical points**) while the rect is in **physical pixels** — so on a 2× display every coordinate doubled and the monitor lookup returned `None` |
+
+The corner fix is `clip_to_card_radius`: set `cornerRadius` + `masksToBounds` on the window's view.
+**It only adds clipping; it does not touch the material** — the glass was always meant to be
+clipped to that radius.
+
+The positioning fix is honest about its limits. When the icon rect is unusable, `position_under`
+anchors to the **right end of the menu bar** instead of leaving the window wherever it happened to
+be created. **That is a guess at a sensible position, not a repair** — the panel no longer drifts
+into the middle of the screen, but it does not promise to sit under the icon you clicked. Doing
+that properly needs the status item's real frame (`ns_status_item()`), which is upstream.
+
+Details: [`docs/macos.md`](docs/macos.md).
 
 ---
 
@@ -112,6 +134,7 @@ src-tauri/                ← the shell
   tick.rs                   background loop: sleeps to the next boundary
   popover.rs                popover creation, positioning, native material
   provider.rs               synced-copy read/write + UPDATE_URL (★ coupled to the CSP)
+  autostart.rs              login item: read/write, plus per-launch path healing
   core.rs                   app state + the commands the frontend calls
 ui/                       ← popover frontend, static HTML/CSS/JS, no bundler
 ```
@@ -128,7 +151,7 @@ turn of phrase, price rounding and countdown string has a unit test. There is no
 date arithmetic or number formatting in the frontend.
 
 **Every failure path renders grey, never nothing.** A corrupt config or a bad
-`APIBUDGET_FAKE_NOW` shows Unknown plus a reason. The workspace release profile deliberately does
+`DEEPSEEKBUDGET_FAKE_NOW` shows Unknown plus a reason. The workspace release profile deliberately does
 **not** set `panic = "abort"`: it would save a little size but would let any panic in a background
 thread kill the process and make the icon vanish. A missing price indicator is far worse than a
 grey dot.
@@ -144,11 +167,11 @@ Line Tools (**not** full Xcode).
 npm install          # only to get @tauri-apps/cli
 npm run dev          # launches; the icon appears in the menu bar
 
-cargo test --workspace                   # 113 tests
-cargo test -p apibudget-schedule         # engine only, ~0.5 s
+cargo test --workspace                      # 127 tests
+cargo test -p deepseekbudget-schedule       # engine only, ~0.6 s
 
-npx tauri build --bundles app            # macOS .app
-cargo build --release -p api-budget      # Windows portable exe, no installer
+npx tauri build --bundles app               # macOS .app
+cargo build --release -p deepseek-budget    # Windows portable exe, no installer
 ```
 
 ### Time travel (the most important development facility)
@@ -157,10 +180,10 @@ Peak/off-peak boundaries cannot be verified by waiting — the next one may be h
 Friday evening it is **63 hours** away. So "now" can be pinned with an environment variable:
 
 ```bash
-APIBUDGET_FAKE_NOW=2026-09-14T02:00:00Z npm run dev   # Monday 10:00 Beijing → peak (orange)
-APIBUDGET_FAKE_NOW=2026-09-14T05:00:00Z npm run dev   # Monday 13:00 Beijing → lunch off-peak
-APIBUDGET_FAKE_NOW=2026-09-12T02:00:00Z npm run dev   # Saturday → off-peak all day
-APIBUDGET_FAKE_NOW=2026-09-14T03:59:59Z npm run dev   # one second of peak left → watch it flip
+DEEPSEEKBUDGET_FAKE_NOW=2026-09-14T02:00:00Z npm run dev   # Monday 10:00 Beijing → peak (orange)
+DEEPSEEKBUDGET_FAKE_NOW=2026-09-14T05:00:00Z npm run dev   # Monday 13:00 Beijing → lunch off-peak
+DEEPSEEKBUDGET_FAKE_NOW=2026-09-12T02:00:00Z npm run dev   # Saturday → off-peak all day
+DEEPSEEKBUDGET_FAKE_NOW=2026-09-14T03:59:59Z npm run dev   # one second of peak left → watch it flip
 ```
 
 It must be RFC 3339. A typo does not crash anything: a warning goes to stderr and the real clock
@@ -173,11 +196,11 @@ The popover is created on the **first tray click**, and that is the moment the n
 applied. To check the material without a human clicking:
 
 ```bash
-APIBUDGET_OPEN_POPOVER=1 npm run dev
+DEEPSEEKBUDGET_OPEN_POPOVER=1 npm run dev
 ```
 
 It expands on launch and prints a material report to stderr, e.g.
-`API Budget: popover material — native glass applied`, or
+`DeepSeek Budget: popover material — native glass applied`, or
 `none available, falling back to an opaque background`.
 
 ## Known limitations
@@ -191,18 +214,23 @@ It expands on launch and prints a material report to stderr, e.g.
 3. **The Windows tooltip degrades.** Windows caps tray tooltips at 127 UTF-16 characters and does
    not document multi-line support, so Windows gets a compressed three-line form and the popover
    carries the full information.
-4. **Launch-at-login has an unverified hop.** The feature exists, and on Windows both the written
-   registry value and "that command line really does start the tray icon" were checked — but the
-   machine was **never logged out or restarted**, so "Windows executes it at login" is inference,
-   not observation. The macOS half is further out still: none of its runtime behaviour has been
-   exercised on a Mac.
+4. **Launch-at-login has one unverified hop left.** On Windows, both the written registry value and
+   "that command line really does start the tray icon" were checked. On macOS the LaunchAgent is now
+   exercised for real — `launchctl bootstrap` loaded it (`state = running`, `runs = 1`), and moving
+   the app made the entry heal byte-for-byte. But **neither machine was logged out or restarted**,
+   so "the OS runs it at login" is still inference. What remains on macOS is the OS's scheduling
+   timing rather than our code, since `launchctl bootstrap` is the same operation launchd performs
+   at login.
 5. **A moved portable build is only healed on the next launch.** Both platforms store an absolute
    path, so moving the app leaves the entry pointing at nothing. Every launch rewrites it — but the
    login that happens *between* the move and the next launch is simply lost, silently. (On macOS,
    running straight from the download folder, i.e. App Translocation, is the same situation.)
-6. **The glass appearance cannot be verified automatically.** `NSGlassEffectView` does not exist in
-   headless Chrome and `screencapture` is blocked by screen-recording permission. The code path
-   *can* be verified (see the material report); whether it looks good can only be judged by eye.
+6. **The glass appearance is verified by eye, not by assertion.** `NSGlassEffectView` does not exist
+   in headless Chrome, so the code path is checked by the material report and the *appearance* by
+   screenshot. Screen-recording permission for `screencapture` was granted on 2026-09-13, which is
+   what made the menu bar icon and the popover photographable at all. **Before that, this project
+   claimed Windows was the easier platform to verify — that claim is now void.** Platform
+   verifiability is a quantity that changes; it is only true as of the date it was measured.
 7. **Config-error messages are English only.** They come from `ScheduleError`'s `Display` and are
    not localised. These are developer/config-time errors.
 8. **The language is read once at launch.** Changing the system language needs a restart. Switching
@@ -215,7 +243,7 @@ It expands on launch and prints a material report to stderr, e.g.
 
 ## Distribution and signing
 
-`npx tauri build --bundles app` produces `target/release/bundle/macos/API Budget.app`.
+`npx tauri build --bundles app` produces `target/release/bundle/macos/DeepSeek Budget.app`.
 
 **The `.app` is itself portable** — drag it anywhere and double-click; no installer, no admin
 rights. (macOS has no "single-file exe"; a `.app` is its equivalent.)
@@ -318,6 +346,7 @@ Three documents cover that layer:
 | [`docs/domain-pricing.md`](docs/domain-pricing.md) | The DeepSeek peak/off-peak rules this app encodes (verified against the official page), how timezones are modelled, and **how far the official API actually lets you measure your own spend** |
 | [`docs/icon-pipeline.md`](docs/icon-pipeline.md) | How the tray icon is produced, why the canvas is 49×36 rather than square, a measured comparison of two export pipelines, and how the result stacks up against shipping menu bar apps |
 | [`docs/windows.md`](docs/windows.md) | What the Windows port actually cost: popover positioning, the foreground lock, why acrylic forces square corners, the 127-character tooltip limit, and three traps in automating Windows UI verification |
+| [`docs/macos.md`](docs/macos.md) | The other side of the same story: a `tray.rect()` that returns a zero-height rectangle, a monitor lookup that takes logical points while being handed physical pixels, who owns the corner radius, and a platform-verifiability claim that had to be retracted |
 
 ---
 

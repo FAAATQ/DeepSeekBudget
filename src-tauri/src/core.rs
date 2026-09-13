@@ -1,11 +1,11 @@
 //! Application state and the commands the popover calls.
 //!
-//! Everything here is a thin shell over `apibudget-schedule`. The rule this module follows:
+//! Everything here is a thin shell over `deepseekbudget-schedule`. The rule this module follows:
 //! **no failure may remove the tray icon.** A missing config, an unparseable schedule or a
-//! bad `APIBUDGET_FAKE_NOW` all resolve to the grey Unknown dot plus an error string, never
+//! bad `DEEPSEEKBUDGET_FAKE_NOW` all resolve to the grey Unknown dot plus an error string, never
 //! to a panic or an absent icon.
 
-use apibudget_schedule::{
+use deepseekbudget_schedule::{
     Clock, CompiledSchedule, Locale, PriceState, Provenance, ProviderConfig, StateView, ViewInput,
     build_view, clock_from_env, display, load_bundled, tooltip_lines,
 };
@@ -17,7 +17,7 @@ use tauri::{AppHandle, State};
 
 use crate::provider;
 
-pub const APP_NAME: &str = "API Budget";
+pub const APP_NAME: &str = "DeepSeek Budget";
 const SETTINGS_FILE: &str = "settings.json";
 
 /// Fixed offsets offered in the settings panel.
@@ -116,7 +116,7 @@ impl AppCore {
             }
         };
 
-        // A malformed APIBUDGET_FAKE_NOW is a developer typo, not a product failure. Warn on
+        // A malformed DEEPSEEKBUDGET_FAKE_NOW is a developer typo, not a product failure. Warn on
         // stderr — the channel a developer is actually watching — and carry on with the real
         // clock. Routing it into `error` would pin the tray to a grey Unknown dot for end
         // users who could never have set this variable in the first place.
@@ -124,7 +124,7 @@ impl AppCore {
             Ok(clock) => clock,
             Err(e) => {
                 eprintln!("{APP_NAME}: ignoring the pinned clock — {e}");
-                Box::new(apibudget_schedule::SystemClock)
+                Box::new(deepseekbudget_schedule::SystemClock)
             }
         };
 
