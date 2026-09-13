@@ -143,7 +143,7 @@ let png_icon = icon.inner.to_png()?;        // ← 设图标时直接转 PNG
 |---|---|
 | **灰色 Unknown 在中灰背景上对比度弱** | 浅色/深色菜单栏都没问题，但半透明菜单栏透出深色壁纸时可能出现中间调。`#8e8e93` 与中灰接近 |
 | **不随明暗菜单栏自动反色** | template 模式的代价 —— 这是换取颜色语义必须付的 |
-| **应用图标（Finder/Dock）仍是原来的几何图形** | 没换成官方 logo，涉及商标使用，未被要求 |
+| **16px 下细节糊** | 应用图标是「钞票 + 鲸鱼」的插画，256/128/64 都清晰，32 仍可读，**16px 只能看出一个蓝圆**。这是插画类图标的固有代价，不是管线问题 —— 要 16px 也清楚就得换更简的形状 |
 
 ---
 
@@ -151,8 +151,15 @@ let png_icon = icon.inner.to_png()?;        // ← 设图标时直接转 PNG
 
 ```bash
 python3 tools/make-tray-icons.py    # 三个托盘图标（从 assets/deepseek-logo.svg 上色）
-python3 tools/make-app-icon.py      # 应用图标源图 1024×1024
-npm run icons                       # 由源图派生整套 bundle.icon
+npm run icons                       # 由 src-tauri/app-icon.png 派生整套 bundle.icon
 ```
+
+> **应用图标的源图是手绘的**（`src-tauri/app-icon.png`，1024×1024），不再由脚本生成。
+> 它原先由 `tools/make-app-icon.py` 画一个几何图形，2026-09-13 换成「钞票 + 鲸鱼」的插画后
+> **那个脚本已删除** —— 留着它，谁跑一次就会把图标悄悄退回旧的几何图形。
+>
+> 换图标时要处理一件事：源图边缘可能带 **alpha=1 的压缩残渣**（肉眼不可见，但会被
+> LANCZOS 缩放放大成孤立碎点，也会撑大内容包围盒）。做法是先缩放、再取最大连通块、
+> 其余清零。做法：先缩放、再取最大连通块、其余清零。
 
 Chrome 路径可用 `$CHROME` 覆盖。选 Chrome 的理由：它是这台机器上**已有的**唯一 SVG 渲染器（离屏预览也在用），不为画三个 36px 小图引入 cairosvg 或 librsvg 整条工具链。
