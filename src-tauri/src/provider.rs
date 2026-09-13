@@ -34,11 +34,24 @@ pub const PROVIDER_FILE: &str = "provider.json";
 /// updating a price does not require touching the app's repository at all — the two have
 /// genuinely different lifetimes, since prices change and the app does not.
 ///
+/// **Served through jsDelivr, not `raw.githubusercontent.com`.** Measured 2026-09-13 from a
+/// mainland-China network: `raw.githubusercontent.com` timed out on 5 of 5 attempts (19-20 s),
+/// while the jsDelivr mirror answered 4 of 4 in ~0.3 s. Since the audience for a DeepSeek
+/// price indicator is largely there, the raw host made "Check for updates" effectively dead
+/// for the people it was built for. The bundled config still means the app works offline.
+///
+/// The cost of the mirror is caching: jsDelivr serves a branch ref with `s-maxage=43200`
+/// (12 h) and `max-age=604800` (7 d). The browser half is already handled — the frontend
+/// fetches with `cache: "no-store"`. The edge half is handled by purging: the config
+/// repository runs a workflow that calls `purge.jsdelivr.net` on every push, so a price
+/// change is visible on the next click rather than the next day. Appending a query string
+/// does **not** work — measured, jsDelivr normalises it away and still answers `HIT`.
+///
 /// COUPLING: the origin here must match `connect-src` in `app.security.csp`
 /// (`tauri.conf.json`). Change one without the other and the fetch is blocked by the webview,
 /// silently and at runtime. Both files carry this note.
 pub const UPDATE_URL: &str =
-    "https://raw.githubusercontent.com/FAAATQ/deepseek-budget-config/main/deepseek.json";
+    "https://cdn.jsdelivr.net/gh/FAAATQ/DeepSeekBudget-config@main/deepseek.json";
 
 /// What a config load resolved to.
 pub struct Loaded {
@@ -322,8 +335,8 @@ mod tests {
 
     /// The fetch path's version of the same rule, and the one that actually matters in
     /// practice: a stale CDN response must not overwrite a newer config that is already in
-    /// force. `raw.githubusercontent.com` sends `max-age=300`, so this is a reachable state,
-    /// not a hypothetical one.
+    /// force. jsDelivr serves a branch ref with `s-maxage=43200`, so this is a reachable state,
+    /// not a hypothetical one — and the reason the purge workflow above exists.
     #[test]
     fn a_stale_fetch_cannot_overwrite_a_newer_config_already_in_force() {
         let scratch = Scratch::new("stale-fetch");

@@ -35,6 +35,31 @@
   in **logical points**, while the tray rect is in **physical pixels** — so on a 2× display every
   coordinate was doubled. Single-monitor setups passed by luck.
 
+### Fixed — the price sync did not work where most users are
+
+- **The config was fetched from `raw.githubusercontent.com`, which is unreachable from mainland
+  China.** Measured 2026-09-13: **5 of 5 attempts timed out** (19–20 s each), while the jsDelivr
+  mirror of the same file answered **4 of 4 in ~0.3 s**. Since the audience for a DeepSeek price
+  indicator is largely there, "Check for updates" was effectively dead for the people it was built
+  for. `UPDATE_URL` and the CSP's `connect-src` now point at `cdn.jsdelivr.net` — still exactly one
+  origin, so the "one opening" property is unchanged.
+- **The mirror costs caching, and the cost is paid explicitly.** jsDelivr serves a branch ref with
+  `s-maxage=43200` (12 h at the edge) and `max-age=604800` (7 d in the browser). The browser half
+  was already handled — the frontend fetches with `cache: "no-store"`. The edge half is handled by
+  a purge workflow in the config repository that runs on every push, so a price change is visible
+  on the next click rather than the next day. Appending a query string does **not** work:
+  measured, jsDelivr normalises it away and still answers `cf-cache-status: HIT`.
+
+### Fixed — `tools/make-preview.py` had been quietly broken since v0.2.0
+
+- The offscreen preview stubbed four `window.__TAURI__` commands and returned `null` for anything
+  else. When the price-sync release added a fifth (`get_provider_status`), the preview started
+  rendering an **error banner** instead of a panel — and nothing failed, because a stub that
+  returns `null` is not an error until something reads a field off it. The tool built to catch
+  "Rust emits a name the frontend does not read" had itself drifted the same way. It now derives
+  the stub from the payload and from `provider.rs`, and **throws on an unknown command** rather
+  than returning `null`.
+
 ### Verification
 
 - **127 tests pass** (90 engine + 36 app + 1 doc) — 3 more than the previous release, all
