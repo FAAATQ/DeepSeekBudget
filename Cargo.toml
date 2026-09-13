@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = ["crates/schedule", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[profile.release]
+# Keep the shipped binary small — this app's whole pitch is "a few MB, no installer".
+#
+# `panic = "abort"` is deliberately NOT set. It would save a little size, but it also makes
+# a panic anywhere — including on the background tick thread — abort the whole process and
+# silently remove the tray icon. A price indicator that vanishes is worse than one that
+# shows a grey "unknown" dot, so panics unwind and every failure path returns a Result that
+# renders as Unknown instead.
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

@@ -1,0 +1,31 @@
+[package]
+name = "api-budget"
+description = "See the price. Know when to wait. A menu bar indicator for DeepSeek's peak/off-peak API pricing."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# `tray-icon` is the feature that makes this a menu bar app at all.
+# `image-png` is required for `Image::from_bytes` to decode the bundled PNGs.
+# `macos-private-api` is only for the popover's transparency and rounded corners; it is a
+# documented App Store blocker, which is irrelevant for a tray utility that ships unsigned.
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+
+apibudget-schedule = { path = "../crates/schedule" }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Native window material. On macOS 26+ this is real Liquid Glass (NSGlassEffectView); it
+# degrades to NSVisualEffectView vibrancy on older macOS, and to acrylic/mica on Windows.
+# Its objc2 requirements are already satisfied by the versions tauri pulls in (objc2 0.6.4,
+# objc2-app-kit 0.3.2), so this adds no duplicate dependency — only the crate's own few KB.
+window-vibrancy = "0.8"
+
+# Reads the system UI language. Zero dependencies on native targets — on macOS it calls
+# CFLocaleCopyPreferredLanguages directly.
+sys-locale = "0.3"

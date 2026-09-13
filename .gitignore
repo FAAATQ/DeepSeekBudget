@@ -1,0 +1,17 @@
+# Build output — by far the biggest thing here (several GB once tauri is compiled).
+/target
+
+# Only holds the Tauri CLI; the frontend itself has no dependencies and no build step.
+/node_modules
+
+# Tauri regenerates these from tauri.conf.json on every build.
+/src-tauri/gen
+
+# macOS
+.DS_Store
+
+# Scratch output from the verification tools (screenshots, crops, DOM dumps).
+/shots
+
+# Python writes these next to the verification tools whenever one of them is imported.
+__pycache__/

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>API Budget</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="card">
+      <header class="bar">
+        <span class="app-name">API Budget</span>
+        <span class="bar-actions">
+          <button class="icon-button" id="settings-toggle" data-i18n-title="settings">⚙</button>
+        </span>
+      </header>
+
+      <!-- Current tier and countdown. Every value here is formatted by the Rust engine. -->
+      <section class="hero" id="hero">
+        <div class="pill unknown" id="state-pill">
+          <span class="dot"></span>
+          <span id="state-label" data-i18n="loading">Loading…</span>
+        </div>
+        <div class="countdown" id="countdown"></div>
+        <div class="clock" id="clock"></div>
+      </section>
+
+      <p class="error" id="error" hidden></p>
+
+      <!-- Today's windows in the viewer's zone -->
+      <section class="panel" id="schedule-panel">
+        <div class="panel-head">
+          <span class="panel-title" id="schedule-title"></span>
+          <span class="panel-meta" id="zone-label"></span>
+        </div>
+        <ul class="segments" id="segments"></ul>
+        <p class="fineprint" id="rule-label"></p>
+      </section>
+
+      <!-- Prices, in whichever tier is in force. The chip is the currency switch. -->
+      <section class="panel" id="prices-panel">
+        <div class="panel-head">
+          <span class="panel-title" data-i18n="prices">Prices</span>
+          <button class="chip" id="currency-toggle" data-i18n-title="switchCurrency">
+            <span id="currency-symbol">¥</span>
+            <span class="chip-code" id="currency-code">CNY</span>
+          </button>
+        </div>
+        <table class="prices" id="prices"></table>
+        <p class="fineprint" id="tier-note"></p>
+      </section>
+
+      <!-- Settings, toggled from the header -->
+      <section class="panel" id="settings-panel" hidden>
+        <label class="field">
+          <span data-i18n="language">Language</span>
+          <select id="language-select"></select>
+        </label>
+        <label class="field">
+          <span data-i18n="currency">Currency</span>
+          <select id="currency-select"></select>
+        </label>
+        <label class="field">
+          <span data-i18n="timezone">Timezone</span>
+          <select id="timezone-select"></select>
+        </label>
+        <p class="fineprint" id="language-note" data-i18n="languageNote"></p>
+        <p class="fineprint" id="settings-note"></p>
+
+        <!--
+          Pricing data. The label says which copy of the figures is in force — the one built
+          into this binary, or one the user fetched — because a number is only trustworthy if
+          you know where it came from and how old it is.
+        -->
+        <div class="field">
+          <span data-i18n="priceData">Price data</span>
+          <span class="field-value" id="provider-source"></span>
+        </div>
+        <div class="actions">
+          <button class="chip" id="sync-button" data-i18n="checkUpdate">Check for updates</button>
+          <button class="chip" id="reset-button" data-i18n="restoreBuiltIn" hidden>
+            Restore built-in
+          </button>
+        </div>
+        <p class="fineprint" id="sync-note" data-i18n="syncHint"></p>
+      </section>
+
+      <!-- About, from the tray menu -->
+      <section class="panel" id="about-panel" hidden>
+        <p class="fineprint" id="about-source"></p>
+        <ul class="notes" id="notes"></ul>
+      </section>
+
+      <footer class="foot" id="foot"></footer>
+    </div>
+
+    <script src="i18n.js"></script>
+    <script src="main.js"></script>
+  </body>
+</html>

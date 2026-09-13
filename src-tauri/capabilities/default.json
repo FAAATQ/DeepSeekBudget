@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions for the popover. The webview calls only this app's own commands, so it needs nothing beyond the core defaults: no filesystem, no shell, and no HTTP plugin — the one network request the app can make (fetching a newer pricing config) goes through the webview's own `fetch`, which the CSP's `connect-src` restricts to a single origin.",
+  "windows": ["popover"],
+  "permissions": ["core:default"]
+}

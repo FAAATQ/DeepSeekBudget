@@ -1,0 +1,15 @@
+{
+  "name": "api-budget",
+  "private": true,
+  "version": "0.1.0",
+  "description": "See the price. Know when to wait. A menu bar indicator for DeepSeek's peak/off-peak API pricing.",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "icons": "tauri icon src-tauri/app-icon.png",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

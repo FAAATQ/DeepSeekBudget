@@ -1,0 +1,463 @@
+/* The palette mirrors the tray icons, which are Apple's system colours, so the panel and the
+   menu bar indicator read as one object.
+
+   The glass story, which is the subtle part:
+
+   The native material (NSGlassEffectView on macOS 26+, NSVisualEffectView before that,
+   acrylic on Windows) is applied to the *window*, behind this webview. For it to be visible
+   at all, this layer has to get out of the way — so when `data-glass="on"`, the card drops to
+   a barely-there tint and gives up its own `backdrop-filter`, because the native view is
+   already blurring and two blurs fight each other.
+
+   The default is the opaque card, deliberately. Rust sets the attribute only after the
+   material has actually been applied, so there is never a frame of translucent 10pt text
+   sitting unreadable on a wallpaper. No glass, no translucency — not the other way round. */
+
+:root {
+  /* On macOS this MUST equal CARD_RADIUS in src-tauri/src/popover.rs: the native glass view is
+     given that radius and draws its own rounded corner, so any disagreement shows up as a halo
+     at the edge. */
+  --card-radius: 14px;
+
+  --fg: #1c1c1e;
+  --muted: #6b6b70;
+  --faint: #97979d;
+  --line: rgba(0, 0, 0, 0.09);
+  --hover: rgba(0, 0, 0, 0.05);
+  --offpeak: #34c759;
+  --peak: #ff9500;
+  --unknown: #8e8e93;
+  --accent: #0008ff;
+
+  /* Opaque by default — see the note above. */
+  --card-bg: rgba(250, 250, 252, 0.94);
+  --field-bg: rgba(250, 250, 252, 0.94);
+}
+
+/* Native glass confirmed behind us: hand the material, the blur and the tint over to it. */
+:root[data-glass="on"] {
+  --card-bg: rgba(255, 255, 255, 0.16);
+  --field-bg: rgba(255, 255, 255, 0.34);
+}
+
+/* Windows rounds the window itself, so the card must not round a second time.
+
+   `apply_acrylic` takes no radius — unlike the macOS calls, which are handed CARD_RADIUS — so
+   there the material is a plain rectangle and the corner comes from DWM, which rounds every
+   top-level window to its own radius. Two different radii on the same corner is what produced
+   the "corner inside a corner" look: the OS curve cutting across the card's curve, with the
+   acrylic showing in the sliver between them.
+
+   Dropping the card's radius makes the card a full-bleed rectangle, leaving DWM's curve as the
+   only one drawn. The corner ends up slightly less round than on macOS, which is a fair trade
+   for not having two curves disagree on every corner of the app's only window. */
+:root[data-platform="windows"] {
+  --card-radius: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #f2f2f7;
+    --muted: #a1a1a8;
+    --faint: #78787f;
+    --line: rgba(255, 255, 255, 0.13);
+    --hover: rgba(255, 255, 255, 0.08);
+
+    --card-bg: rgba(30, 30, 32, 0.92);
+    --field-bg: rgba(30, 30, 32, 0.92);
+  }
+
+  /* Listed after the light rule above, so it also wins on equal specificity. */
+  :root[data-glass="on"] {
+    --card-bg: rgba(22, 22, 26, 0.22);
+    --field-bg: rgba(255, 255, 255, 0.10);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  /* The window itself is transparent so the card's rounded corners — and the native material
+     behind it — read correctly. */
+  background: transparent;
+  color: var(--fg);
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* Explicit CJK fallbacks so Chinese text gets a proper face rather than a synthesised one. */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei";
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 10px 14px 12px;
+  background: var(--card-bg);
+  border: 0.5px solid var(--line);
+  border-radius: var(--card-radius);
+  /* No `backdrop-filter` here on purpose. With the native material applied, a CSS blur would
+     be a second blur fighting the first one; without it, there is nothing behind to blur. */
+
+  /* The window is a fixed 320x470 and `resizable(false)`, and the content is taller than that
+     as soon as the settings panel opens — 812px against 468px of card, measured by
+     tools/measure-popover.py. Without this the overflow was simply cut off by
+     `html, body { overflow: hidden }`: the price-data row, the "check for updates" button and
+     the "restore built-in" button all sat below y=470 and could not be reached at all. The
+     whole price-sync feature was invisible, and a missing control does not read as a bug — it
+     reads as a feature the app does not have. */
+  overflow-y: auto;
+  /* Room for the scrollbar so it does not sit on top of the text. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--faint) transparent;
+}
+
+/* Flex children default to `flex-shrink: 1`, which for a column of text blocks means they
+   refuse to shrink (a paragraph cannot get shorter than its own lines) and overflow the card
+   *inside their own boxes* instead. Pinning them at their natural height hands the overflow
+   to the scrolling above, where it becomes reachable. */
+.card > * {
+  flex-shrink: 0;
+}
+
+/* ---------- header ---------- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 0.5px solid var(--line);
+}
+
+.app-name {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.icon-button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: default;
+}
+
+.icon-button:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.icon-button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ---------- hero ---------- */
+
+.hero {
+  padding: 14px 0 12px;
+  text-align: center;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 13px 5px 11px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: var(--hover);
+}
+
+.pill .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.pill.offpeak .dot {
+  background: var(--offpeak);
+}
+.pill.peak .dot {
+  background: var(--peak);
+}
+.pill.unknown .dot {
+  background: var(--unknown);
+}
+
+.countdown {
+  margin-top: 9px;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.clock {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.error {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 149, 0, 0.13);
+  border: 0.5px solid rgba(255, 149, 0, 0.4);
+  color: var(--fg);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* ---------- panels ---------- */
+
+.panel {
+  padding: 10px 0;
+  border-top: 0.5px solid var(--line);
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.panel-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.panel-meta {
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+/* ---------- currency chip ---------- */
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 2px 8px;
+  border: 0.5px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+.chip:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.chip:disabled {
+  opacity: 0.45;
+}
+
+.chip-code {
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+}
+
+/* ---------- schedule segments ---------- */
+
+.segments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.segments li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.segments li.current {
+  background: var(--hover);
+  font-weight: 600;
+}
+
+.segments .swatch {
+  width: 3px;
+  height: 13px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.segments .swatch.offpeak {
+  background: var(--offpeak);
+}
+.segments .swatch.peak {
+  background: var(--peak);
+}
+
+.segments .range {
+  flex: 1;
+  color: var(--fg);
+}
+
+.segments .tier {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.segments li.current .tier {
+  color: var(--fg);
+}
+
+.segments .marker {
+  font-size: 11px;
+  color: var(--faint);
+  flex: none;
+}
+
+/* ---------- prices ---------- */
+
+.prices {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.prices th,
+.prices td {
+  padding: 3px 0;
+  text-align: right;
+  font-weight: 400;
+}
+
+.prices th:first-child,
+.prices td:first-child {
+  text-align: left;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.prices thead th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg);
+  padding-bottom: 5px;
+  border-bottom: 0.5px solid var(--line);
+  /* The first header cell is the localised units label, which is long in both languages. */
+  white-space: nowrap;
+}
+
+.prices tbody tr:first-child td {
+  padding-top: 5px;
+}
+
+.prices .amount {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.fineprint {
+  margin: 7px 0 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+/* Something the app could not do, as opposed to something it is merely reporting. The refusal
+   messages from the engine land here. */
+.fineprint.bad {
+  color: var(--peak);
+}
+
+/* ---------- settings ---------- */
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.field > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+select {
+  flex: 0 1 auto;
+  max-width: 190px;
+  padding: 3px 6px;
+  border: 0.5px solid var(--line);
+  border-radius: 6px;
+  background: var(--field-bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+}
+
+/* A read-only counterpart to `select`: same row and alignment, but nothing to choose — it
+   reports which copy of the pricing data is in force. */
+.field-value {
+  flex: 0 1 auto;
+  max-width: 190px;
+  font-size: 12px;
+  color: var(--fg);
+  text-align: right;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0 0;
+}
+
+/* ---------- about / notes ---------- */
+
+.notes {
+  margin: 6px 0 0;
+  padding-left: 14px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+/* ---------- footer ---------- */
+
+.foot {
+  margin-top: auto;
+  padding-top: 9px;
+  border-top: 0.5px solid var(--line);
+  font-size: 10.5px;
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}

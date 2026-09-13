@@ -1,0 +1,67 @@
+{
+  "provider": "deepseek",
+  "displayName": "DeepSeek",
+  "sourceUrl": "https://api-docs.deepseek.com/quick_start/pricing",
+  "verifiedAt": "2026-09-12",
+  "defaultCurrency": "CNY",
+  "notes": {
+    "en": [
+      "Off-peak rates are half of peak rates.",
+      "Peak windows are platform-wide and do not vary by model.",
+      "Peak hours are 01:00 - 04:00 and 06:00 - 10:00 UTC, Monday through Friday (all other hours are off-peak).",
+      "CNY and USD figures are both published by DeepSeek directly; they are not FX conversions of each other."
+    ],
+    "zh": [
+      "空闲时段价格为高峰时段价格的一半。",
+      "峰谷时段为全平台统一，不随模型变化。",
+      "高峰时段为北京时间周一至周五 9:00 - 12:00、14:00 - 18:00（其余为空闲时段）。",
+      "人民币与美元价格均为 DeepSeek 官方直接公布，并非彼此的汇率换算结果。"
+    ]
+  },
+  "schedule": {
+    "referenceUtcOffsetMinutes": 0,
+    "referenceLabel": "UTC",
+    "weekly": [
+      {
+        "days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        "windows": [["01:00", "04:00"], ["06:00", "10:00"]]
+      }
+    ]
+  },
+  "models": [
+    {
+      "id": "deepseek-flash",
+      "label": "V4.1 Flash",
+      "version": "DeepSeek-V4.1-Flash",
+      "prices": {
+        "CNY": {
+          "inputCacheHit": { "offPeak": 0.02, "peak": 0.04 },
+          "inputCacheMiss": { "offPeak": 1, "peak": 2 },
+          "output": { "offPeak": 4, "peak": 8 }
+        },
+        "USD": {
+          "inputCacheHit": { "offPeak": 0.003, "peak": 0.006 },
+          "inputCacheMiss": { "offPeak": 0.15, "peak": 0.3 },
+          "output": { "offPeak": 0.6, "peak": 1.2 }
+        }
+      }
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "label": "V4 Pro",
+      "version": "DeepSeek-V4-Pro-0813",
+      "prices": {
+        "CNY": {
+          "inputCacheHit": { "offPeak": 0.15, "peak": 0.3 },
+          "inputCacheMiss": { "offPeak": 4.5, "peak": 9.0 },
+          "output": { "offPeak": 13.5, "peak": 27.0 }
+        },
+        "USD": {
+          "inputCacheHit": { "offPeak": 0.022, "peak": 0.044 },
+          "inputCacheMiss": { "offPeak": 0.66, "peak": 1.32 },
+          "output": { "offPeak": 1.98, "peak": 3.96 }
+        }
+      }
+    }
+  ]
+}

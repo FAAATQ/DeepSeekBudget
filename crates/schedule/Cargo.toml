@@ -1,0 +1,15 @@
+[package]
+name = "apibudget-schedule"
+description = "Pure scheduling engine: which pricing tier is active right now, and when it next changes."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Deliberately tiny dependency set. No Tauri, no HTTP client, no timezone database.
+# The engine is a library so it can be unit-tested in isolation (seconds, not minutes)
+# and so the tray app is a thin shell around it.
+[dependencies]
+# `serde` is needed because Transition carries a DateTime<Utc> into the UI payload.
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
