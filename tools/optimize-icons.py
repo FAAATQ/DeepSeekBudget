@@ -34,6 +34,12 @@ wasteful, not the DEFLATE settings.
 
 Run it after `tauri icon`, never instead of it — this script does not generate sizes, it only
 recompresses the ones `tauri icon` produced. `npm run icons` chains the two.
+
+**The two halves have different platform requirements, and the script says so rather than
+crashing.** `.icns` is repacked by `iconutil`, which exists only on macOS. `.ico` is rewritten in
+pure Python and runs anywhere — and it is the *Windows* one, so a Windows build was the one case
+where the script fell over before reaching the half that would have helped it. When `iconutil` is
+missing the `.icns` half is skipped with a note and the `.ico` half still runs.
 """
 
 import glob
@@ -50,6 +56,11 @@ from PIL import Image
 ICNS = os.path.join("src-tauri", "icons", "icon.icns")
 ICO = os.path.join("src-tauri", "icons", "icon.ico")
 COLORS = 256
+
+
+def have(command: str) -> bool:
+    """Whether `command` is on PATH. `shutil.which`, so Windows finds `iconutil.cmd` too."""
+    return shutil.which(command) is not None
 
 
 def build_iconset(icns: str, iconset: str) -> None:
@@ -124,27 +135,39 @@ def main() -> int:
         print(f"{ICNS} not found — run `npm run icons` first", file=sys.stderr)
         return 1
 
-    original = os.path.getsize(ICNS)
-    with tempfile.TemporaryDirectory() as tmp:
-        iconset = os.path.join(tmp, "icon.iconset")
-        build_iconset(ICNS, iconset)
-        before, after = recompress(iconset)
-        # Packed by `iconutil`, not by hand. A hand-written container was tried first and is
-        # *not* read back correctly — `iconutil -c iconset` recovered 1 of the 10 slices from it,
-        # so the padding convention is easy to get subtly wrong. What matters for reproducibility
-        # is the pipeline, not this call: `npm run icons` always regenerates from `tauri icon`
-        # first, so the input to this script is always the pristine set. Running it twice in a row
-        # *without* regenerating drifts, because iconutil re-encodes on the way out.
-        subprocess.run(["iconutil", "-c", "icns", iconset, "-o", ICNS], check=True)
+    if have("iconutil"):
+        original = os.path.getsize(ICNS)
+        with tempfile.TemporaryDirectory() as tmp:
+            iconset = os.path.join(tmp, "icon.iconset")
+            build_iconset(ICNS, iconset)
+            before, after = recompress(iconset)
+            # Packed by `iconutil`, not by hand. A hand-written container was tried first and is
+            # *not* read back correctly — `iconutil -c iconset` recovered 1 of the 10 slices from
+            # it, so the padding convention is easy to get subtly wrong. What matters for
+            # reproducibility is the pipeline, not this call: `npm run icons` always regenerates
+            # from `tauri icon` first, so the input to this script is always the pristine set.
+            # Running it twice in a row *without* regenerating drifts, because iconutil
+            # re-encodes on the way out.
+            subprocess.run(["iconutil", "-c", "icns", iconset, "-o", ICNS], check=True)
 
-    final = os.path.getsize(ICNS)
-    print()
-    print(f"  slices {before:,} -> {after:,} bytes")
-    print(f"  {ICNS} {original:,} -> {final:,} bytes  ({100 * (1 - final / original):.1f}% smaller)")
+        final = os.path.getsize(ICNS)
+        print()
+        print(f"  slices {before:,} -> {after:,} bytes")
+        print(f"  {ICNS} {original:,} -> {final:,} bytes  ({100 * (1 - final / original):.1f}% smaller)")
+    else:
+        # Not a failure. `iconutil` ships with macOS; the `.ico` half below is pure Python and
+        # is the one this platform actually ships.
+        print(
+            "  iconutil not found — skipping the .icns half (it is part of macOS).",
+            file=sys.stderr,
+        )
 
     if os.path.exists(ICO):
         was, now = recompress_ico(ICO)
         print(f"  {ICO} {was:,} -> {now:,} bytes  ({100 * (1 - now / was):.1f}% smaller)")
+    elif not have("iconutil"):
+        print(f"{ICO} not found either — nothing to do", file=sys.stderr)
+        return 1
     return 0
 
 

@@ -61,12 +61,24 @@ pub struct Settings {
     /// moment. It is bounded (one request per interval, to one origin), it is visible (the
     /// settings panel names the interval and when the last check ran), and it can be turned off —
     /// but "no background traffic at all" is no longer true, and the README says so.
+    ///
+    /// Written out here rather than cross-referenced, so this file is the same in every checkout
+    /// of this code. It used to cite an internal design note, which meant the published copy had
+    /// to be hand-edited on every export — and twice came back with the citation restored.
     #[serde(default = "default_auto_check_hours")]
     pub auto_check_hours: u32,
     /// When the last automatic check finished, as RFC 3339. `None` means never — and never
     /// counts as due, so a fresh install gets today's figures instead of waiting a day.
     #[serde(default)]
     pub last_auto_check: Option<String>,
+}
+
+/// A panel the tray menu can ask the popover to open on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PanelRequest {
+    Settings,
+    About,
 }
 
 /// The default interval, named so `serde` and `Default` cannot drift apart.
@@ -170,6 +182,13 @@ pub struct AppCore {
     /// In memory only — it describes "right now", not a user preference. See [`take_auto_check`]
     /// for why this exists instead of relying on the event alone.
     pub auto_check_pending: bool,
+    /// A panel the tray menu asked to open and the webview has not collected yet.
+    ///
+    /// Same reason as [`take_auto_check`], and the same failure if it is missing: the menu
+    /// emits, the popover is created as a *result* of that menu item, and the emit reaches a
+    /// page that has not started loading. It is dropped, silently, and the item looks broken
+    /// exactly once per session — the hardest kind of bug to report. In memory only.
+    pub pending_panel: Option<PanelRequest>,
     pub rendered: Rendered,
     settings_dir: PathBuf,
 }
@@ -223,6 +242,7 @@ impl AppCore {
             settings,
             locale,
             auto_check_pending: false,
+            pending_panel: None,
             // Flipped to true by `popover` if the native material applies. Defaults to the
             // honest answer: not applied yet.
             glass_applied: false,
@@ -580,6 +600,25 @@ pub fn set_auto_check_hours(
 pub fn take_auto_check(core: State<'_, Mutex<AppCore>>) -> Result<bool, String> {
     let mut core = lock(&core)?;
     Ok(std::mem::replace(&mut core.auto_check_pending, false))
+}
+
+/// Which panel the tray menu asked for, if any. Clears it — the caller owns the request now.
+///
+/// The page collects this on boot *and* clears it whenever an `open-settings`/`open-about`
+/// event arrives, so that a request is honoured exactly once in every ordering: whether the
+/// window already existed, was mid-load, or did not exist at all.
+#[tauri::command]
+pub fn take_panel_request(core: State<'_, Mutex<AppCore>>) -> Result<Option<PanelRequest>, String> {
+    let mut core = lock(&core)?;
+    Ok(core.pending_panel.take())
+}
+
+/// Ask the popover to open on a particular panel. See [`take_panel_request`].
+pub fn set_pending_panel(core: &Mutex<AppCore>, request: PanelRequest) {
+    match core.lock() {
+        Ok(mut core) => core.pending_panel = Some(request),
+        Err(poisoned) => poisoned.into_inner().pending_panel = Some(request),
+    }
 }
 
 #[tauri::command]

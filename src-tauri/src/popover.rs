@@ -9,7 +9,7 @@
 //! third-party plugin depending on the deprecated `objc`/`cocoa` crates. Not a dependency
 //! worth taking for v0.1 of a tool whose pitch is a small, robust binary.
 
-use crate::core::{AppCore, APP_NAME};
+use crate::core::{AppCore, PanelRequest, APP_NAME};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -349,13 +349,33 @@ fn report_rect_if_asked(window: &WebviewWindow) {
     );
 }
 
+/// Open the popover on its settings panel, from the tray menu.
+///
+/// **The emit alone is not enough, and that is the bug this fixes.** The popover is created
+/// lazily, so on the first use of this menu item there is no window to emit to: `emit_to`
+/// returns an error nobody reads, `show_at_tray` then creates the window, and the page that
+/// finally loads has never heard of the request. The menu item appears to do nothing — once
+/// per session, which is precisely the kind of fault that gets reported as "sometimes".
+///
+/// So the request is recorded as well as sent. Whichever arrives first wins, and the page
+/// clears the record when it acts on either.
 pub fn show_settings(app: &AppHandle) {
-    let _ = app.emit_to(LABEL, "open-settings", ());
-    show_at_tray(app);
+    request_panel(app, PanelRequest::Settings, "open-settings");
 }
 
 pub fn show_about(app: &AppHandle) {
-    let _ = app.emit_to(LABEL, "open-about", ());
+    request_panel(app, PanelRequest::About, "open-about");
+}
+
+fn request_panel(app: &AppHandle, request: PanelRequest, event: &str) {
+    if let Some(core) = app.try_state::<Mutex<AppCore>>() {
+        crate::core::set_pending_panel(&core, request);
+    }
+    // A page that is already up hears this and clears the record itself; one that is still
+    // loading misses it and collects the record on boot instead.
+    if let Some(window) = app.get_webview_window(LABEL) {
+        let _ = window.emit(event, ());
+    }
     show_at_tray(app);
 }
 
@@ -388,6 +408,21 @@ impl PixelRect {
     fn bottom(&self) -> i32 {
         self.y + self.height
     }
+
+    fn contains(&self, point: (i32, i32)) -> bool {
+        point.0 >= self.x && point.0 < self.right() && point.1 >= self.y && point.1 < self.bottom()
+    }
+}
+
+/// Index of the display whose bounds contain `point`, or `None` if none does.
+///
+/// Pure, and deliberately in **physical pixels on both sides**: a tray rect arrives physical,
+/// and so do `Monitor::position()`/`size()` on every platform — macOS multiplies
+/// `CGDisplayBounds` back up by the backing scale factor, Windows reports `rcMonitor` directly.
+/// That sameness is the whole point. See [`position_under`] for why this does not ask
+/// `monitor_from_point` instead.
+fn display_at(bounds: &[PixelRect], point: (i32, i32)) -> Option<usize> {
+    bounds.iter().position(|b| b.contains(point))
 }
 
 /// Where to put a `panel`-sized window, given the tray icon's rect and the **work area** of
@@ -460,43 +495,69 @@ fn position_under(window: &WebviewWindow, rect: Rect) {
         height: size.height as i32,
     };
 
-    let scale = window.scale_factor().unwrap_or(1.0);
-    let panel = ((WIDTH * scale) as i32, (HEIGHT * scale) as i32);
-    let gap = (GAP * scale) as i32;
-
     // **A zero-height rect is not a position.** macOS 26 hands back the status item's window as
-    // `{{0, 0}, {41, 0}}`, and feeding that centre to the monitor lookup below does not fail
-    // loudly — it fails as "no monitor contains (41, 2100)", which used to mean the panel was
-    // never positioned at all and simply stayed wherever its window was created. A menu bar
-    // panel that opens in the middle of the screen is what that looks like from the outside.
+    // `{{0, 0}, {41, 0}}`, and a degenerate rect used to mean the panel was never positioned at
+    // all and simply stayed wherever its window was created. A menu bar panel that opens in the
+    // middle of the screen is what that looks like from the outside.
     //
     // Width *and* height are both checked: the height is the one that goes to zero here, but a
     // rect with no width is no more of a position.
     let icon_is_usable = icon.width > 0 && icon.height > 0;
 
-    // Ask which monitor the *icon* is on, rather than which one the window is on: the popover is
+    // Which monitor the *icon* is on, rather than which one the window is on: the popover is
     // still hidden the first time it is positioned, so `current_monitor()` would be guessing.
     //
-    // The units are the trap. `monitor_from_point` is documented as taking a point, and tao's
-    // macOS implementation tests it against `CGDisplayBounds` — which is in **logical points** —
-    // while a tray rect arrives in **physical pixels**. Passing one as the other doubles every
-    // coordinate on a 2x display: harmless on a single screen by luck, wrong screen on a desk
-    // with two. Convert before asking.
+    // Resolved by comparing bounds, **not** by asking `monitor_from_point`. That function takes
+    // a point, and the units of that point are a platform difference nobody documents: tao's
+    // macOS implementation tests it against `CGDisplayBounds`, which is in **logical points**,
+    // while its Windows implementation hands it straight to `MonitorFromPoint`, which wants
+    // **physical pixels**. One function, two units. Feeding it the wrong one doubles every
+    // coordinate on a 2x display or halves it — harmless on a single screen by luck, wrong
+    // screen on a desk with two, in both directions. It has already been fixed once in the
+    // macOS direction and broken the Windows one in the process.
+    //
+    // `Monitor::position()`/`size()` are physical on *both* platforms and so is the tray rect,
+    // so this comparison needs no conversion and has no platform branch to get wrong.
+    let monitors = window.available_monitors().unwrap_or_default();
+    let bounds: Vec<PixelRect> = monitors
+        .iter()
+        .map(|m| {
+            let position = m.position();
+            let size = m.size();
+            PixelRect {
+                x: position.x,
+                y: position.y,
+                width: size.width as i32,
+                height: size.height as i32,
+            }
+        })
+        .collect();
     let centre = (
-        (icon.x as f64 + icon.width as f64 / 2.0) / scale,
-        (icon.y as f64 + icon.height as f64 / 2.0) / scale,
+        icon.x + icon.width / 2,
+        icon.y + icon.height / 2,
     );
     let monitor = icon_is_usable
-        .then(|| window.monitor_from_point(centre.0, centre.1).ok().flatten())
+        .then(|| display_at(&bounds, centre))
         .flatten()
-        // The icon's rect was unusable, or it resolved to nothing. Fall back to the monitor the
-        // window is on, then to the primary one, so there is always *somewhere* to anchor.
+        .map(|i| monitors[i].clone())
+        // The icon's rect was unusable, or no display contained its centre (a gap between
+        // monitors, or a stale rect). Fall back to the monitor the window is on, then to the
+        // primary one, so there is always *somewhere* to anchor.
         .or_else(|| window.current_monitor().ok().flatten())
         .or_else(|| window.primary_monitor().ok().flatten());
     let Some(monitor) = monitor else {
         eprintln!("{APP_NAME}: no monitor to anchor the popover to");
         return;
     };
+
+    // The scale of the monitor the panel is going *to*, not the one the hidden window happens
+    // to be sitting on. The window is created with a *logical* size, and tao preserves that
+    // logical size across a DPI change, so the physical size it takes on is decided by the
+    // monitor it lands on — using the window's current scale sizes the panel for the wrong
+    // screen whenever the two differ.
+    let scale = monitor.scale_factor();
+    let panel = ((WIDTH * scale) as i32, (HEIGHT * scale) as i32);
+    let gap = (GAP * scale) as i32;
 
     // The *work area*, not the full bounds: on Windows the difference is the taskbar, and
     // using the full bounds would let the panel sit underneath it.
@@ -521,7 +582,7 @@ fn position_under(window: &WebviewWindow, rect: Rect) {
 mod geometry_tests {
     // Aliased for readability in the fixtures below. The type itself is `PixelRect` because
     // `Rect` is already taken by tauri in the parent module.
-    use super::{fallback_origin, panel_origin, PixelRect as Rect};
+    use super::{display_at, fallback_origin, panel_origin, PixelRect as Rect};
 
     /// The panel size measured on Windows at 105% scaling.
     const PANEL: (i32, i32) = (336, 479);
@@ -541,6 +602,57 @@ mod geometry_tests {
         let icon = Rect { x: 1400, y: 0, width: 22, height: 22 };
         let work = Rect { x: 0, y: 25, width: 1512, height: 900 };
         (icon, work)
+    }
+
+    /// Two monitors side by side at *different* scales — the configuration that broke the old
+    /// lookup, and the only one that can.
+    ///
+    /// Physical bounds, which is what `Monitor::position()`/`size()` report: a 2560-wide laptop
+    /// panel at 200% (so 1280 logical points) with a 1920-wide external at 100% to its right.
+    fn mixed_dpi_desk() -> Vec<Rect> {
+        vec![
+            Rect { x: 0, y: 0, width: 2560, height: 1440 },
+            Rect { x: 2560, y: 0, width: 1920, height: 1080 },
+        ]
+    }
+
+    #[test]
+    fn a_display_is_found_from_physical_coordinates_alone() {
+        let desk = mixed_dpi_desk();
+        // An icon on the 100% external monitor, near its right end: physical x 4400.
+        assert_eq!(display_at(&desk, (4424, 1032)), Some(1));
+        // An icon on the 200% laptop panel: physical x 1200 is logical 600, mid-panel.
+        assert_eq!(display_at(&desk, (1200, 700)), Some(0));
+    }
+
+    /// The regression this replaced. `monitor_from_point` wants logical points on macOS and
+    /// physical pixels on Windows; the old code divided by the window's scale factor on both.
+    /// On this desk that halved a coordinate that was already physical, and a tray icon at
+    /// physical x=4424 was looked up at x=2212 — the *laptop*, not the monitor it is on.
+    #[test]
+    fn the_halved_point_would_land_on_the_wrong_display() {
+        let desk = mixed_dpi_desk();
+        let icon_centre = (4424, 1032);
+        assert_eq!(display_at(&desk, icon_centre), Some(1), "the icon is on the external");
+        let halved = (icon_centre.0 / 2, icon_centre.1 / 2);
+        assert_eq!(display_at(&desk, halved), Some(0), "halving it lands on the laptop");
+    }
+
+    #[test]
+    fn a_point_in_no_display_returns_none() {
+        let desk = mixed_dpi_desk();
+        // Right of every monitor, and above every monitor.
+        assert_eq!(display_at(&desk, (9000, 100)), None);
+        assert_eq!(display_at(&desk, (100, -50)), None);
+    }
+
+    /// A point exactly on a shared edge belongs to exactly one display — the half-open rule
+    /// keeps the two from both claiming it, which a `<=` on the far edge would allow.
+    #[test]
+    fn a_shared_edge_belongs_to_the_display_that_starts_there() {
+        let desk = mixed_dpi_desk();
+        assert_eq!(display_at(&desk, (2559, 100)), Some(0));
+        assert_eq!(display_at(&desk, (2560, 100)), Some(1));
     }
 
     /// The bug this whole function exists for. Measured before the fix: the panel was placed

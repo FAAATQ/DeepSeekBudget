@@ -64,6 +64,7 @@ fn main() {
             core::set_language,
             core::set_auto_check_hours,
             core::take_auto_check,
+            core::take_panel_request,
             core::record_auto_check,
             core::apply_provider_config,
             core::reset_provider_config,

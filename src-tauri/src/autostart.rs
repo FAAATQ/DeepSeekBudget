@@ -168,12 +168,12 @@ pub enum Action {
 /// The blob is 12 bytes: a 4-byte state word followed by an 8-byte FILETIME. **The state word
 /// is the signal:** `02 00 00 00` enabled, `03 00 00 00` disabled. `0x06` (enabled by policy)
 /// also runs, so only `03` blocks. The timestamp is *not* a second signal —
-/// `auto-launch 0.5.0` decides on "are the trailing eight bytes all zero", and the machine this
-/// was written on holds a genuinely disabled entry, `Docker Desktop`, as
-/// `03 00 00 00 00 00 00 00 00 00 00 00`, which that rule reads as *enabled*.
+/// `auto-launch 0.5.0` decides on "are the trailing eight bytes all zero", and a genuinely
+/// disabled entry can be written as `03 00 00 00 00 00 00 00 00 00 00 00` — a zero timestamp —
+/// which that rule reads as *enabled*.
 ///
-/// Real samples from that machine, all four now test cases below:
-/// `Microsoft.Lists` / `GameViewer` → `02…00`, `Docker Desktop` → `03…00`, `doubao` → `03…`+time.
+/// The four shapes below are copied out of a real `StartupApproved\Run` key: two enabled
+/// entries, one disabled with a timestamp, and one disabled without.
 pub fn approval_says_blocked(blob: &[u8]) -> bool {
     blob.len() >= 4 && blob[0] == 0x03
 }
@@ -623,8 +623,8 @@ mod tests {
     /// every one of those places can have a space in it.
     #[test]
     fn a_path_with_spaces_is_quoted() {
-        let value = windows_run_value(Path::new(r"C:\Users\ds\My Apps\deepseek-budget.exe"), &[]);
-        assert_eq!(value, r#""C:\Users\ds\My Apps\deepseek-budget.exe""#);
+        let value = windows_run_value(Path::new(r"C:\Users\me\My Apps\deepseek-budget.exe"), &[]);
+        assert_eq!(value, r#""C:\Users\me\My Apps\deepseek-budget.exe""#);
     }
 
     /// A path without spaces is quoted too, so that the recorded string is a function of the
@@ -679,10 +679,10 @@ mod tests {
 
     #[test]
     fn the_launch_agent_lives_where_macos_looks_for_it() {
-        let path = launch_agent_path(Path::new("/Users/ds"), "com.aicoworks.deepseekbudget");
+        let path = launch_agent_path(Path::new("/Users/me"), "com.aicoworks.deepseekbudget");
         assert_eq!(
             path,
-            Path::new("/Users/ds/Library/LaunchAgents/com.aicoworks.deepseekbudget.plist")
+            Path::new("/Users/me/Library/LaunchAgents/com.aicoworks.deepseekbudget.plist")
         );
     }
 
@@ -710,13 +710,13 @@ mod tests {
         assert_eq!(reconcile_action(None, "anything"), Action::Nothing);
     }
 
-    /// Four blobs copied out of `HKCU\…\StartupApproved\Run` on a real Windows 11 machine, so
-    /// the rule is pinned to what Windows actually writes rather than to a description of it.
+    /// Four blobs copied out of a real `HKCU\…\StartupApproved\Run` key, so the rule is pinned
+    /// to what Windows actually writes rather than to a description of it.
     ///
-    /// `Docker Desktop` is the one that matters: it is disabled and its timestamp is zero,
-    /// which is exactly the case the "are the trailing eight bytes zero" rule — the only
-    /// implementation available to copy — reads as *enabled*. A switch that says "on" while
-    /// Windows will not launch the app is the failure this whole module exists to avoid.
+    /// The last one is the case that matters: disabled, with a zero timestamp — exactly what the
+    /// "are the trailing eight bytes zero" rule — the only implementation available to copy —
+    /// reads as *enabled*. A switch that says "on" while Windows will not launch the app is the
+    /// failure this whole module exists to avoid.
     #[test]
     fn the_approval_blob_is_read_from_its_state_word_not_its_timestamp() {
         let enabled = [0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -724,11 +724,11 @@ mod tests {
             [0x03, 0, 0, 0, 0xC1, 0x3E, 0x9A, 0xF7, 0xC8, 0x0B, 0xDD, 0x01];
         let disabled_without_time = [0x03, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-        assert!(!approval_says_blocked(&enabled), "Microsoft.Lists / GameViewer");
-        assert!(approval_says_blocked(&disabled_with_time), "doubao");
+        assert!(!approval_says_blocked(&enabled), "a running entry");
+        assert!(approval_says_blocked(&disabled_with_time), "disabled, timestamp present");
         assert!(
             approval_says_blocked(&disabled_without_time),
-            "Docker Desktop — disabled with a zero timestamp"
+            "disabled, zero timestamp — the case the naive rule gets backwards"
         );
 
         // An absent or truncated blob is not a block: we only report what Windows recorded.

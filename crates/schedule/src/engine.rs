@@ -12,6 +12,7 @@
 //! A week of DeepSeek's schedule is 10 intervals, so the cost is irrelevant.
 
 use crate::locale::Locale;
+use crate::display::render_offset;
 use crate::model::{ScheduleConfig, ScheduleError, WeeklyRule};
 use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use serde::Serialize;
@@ -94,8 +95,18 @@ impl CompiledSchedule {
         if cfg.weekly.is_empty() {
             return Err(ScheduleError::NoRules);
         }
+        // Checked here rather than in `accept`, so the bundled config is held to it too: a rule
+        // with no days compiles into a schedule that is off-peak forever and never transitions,
+        // which is a silent way to lose the app's only output.
+        let offset = cfg.reference_utc_offset_minutes;
+        if !(-12 * 60..=14 * 60).contains(&offset) {
+            return Err(ScheduleError::AbsurdOffset { minutes: offset });
+        }
         let mut rules = Vec::with_capacity(cfg.weekly.len());
         for WeeklyRule { days, windows } in &cfg.weekly {
+            if days.is_empty() {
+                return Err(ScheduleError::EmptyDays);
+            }
             if windows.is_empty() {
                 return Err(ScheduleError::EmptyWindows);
             }
@@ -234,11 +245,25 @@ impl CompiledSchedule {
     pub fn next_transition(&self, now: DateTime<Utc>) -> Option<Transition> {
         let scan_from = self.to_reference(now).date() - Duration::days(2);
         let windows = self.peak_windows_utc(scan_from, 21);
+        let current = self.state_at(now);
 
         let mut best: Option<Transition> = None;
         for (start, end) in windows {
-            for (at_utc, state) in [(start, PriceState::Peak), (end, PriceState::OffPeak)] {
-                if at_utc > now && best.map_or(true, |b| at_utc < b.at_utc) {
+            for at_utc in [start, end] {
+                if at_utc <= now || best.as_ref().is_some_and(|b| b.at_utc <= at_utc) {
+                    continue;
+                }
+                // A boundary only counts if the tier actually differs across it. Two windows
+                // written back to back — `01:00–02:00` then `02:00–04:00`, which is how anyone
+                // would write a four-hour peak in two pieces — put one window's *end* and the
+                // next one's *start* on the same instant. Taking the end at face value reported
+                // "next change in 30 minutes" while the tier went on being peak for another two
+                // hours, and nothing else in the app disagreed: `state_at` was right, the icon
+                // was right, only the countdown — the number this app exists to show — was
+                // wrong. Asking `state_at` what happens on the far side costs one call and
+                // cannot drift from it.
+                let state = self.state_at(at_utc);
+                if state != current {
                     best = Some(Transition { at_utc, state });
                 }
             }
@@ -348,15 +373,6 @@ fn parse_time(raw: &str) -> Result<NaiveTime, ScheduleError> {
         raw: raw.to_string(),
         why: e.to_string(),
     })
-}
-
-fn render_offset(minutes: i32) -> String {
-    if minutes == 0 {
-        return "UTC".to_string();
-    }
-    let sign = if minutes < 0 { '-' } else { '+' };
-    let abs = minutes.abs();
-    format!("UTC{}{}:{:02}", sign, abs / 60, abs % 60)
 }
 
 /// A source of "now". Injected so tests can pin time and so `--fake-now` works in dev.

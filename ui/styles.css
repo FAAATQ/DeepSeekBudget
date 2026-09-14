@@ -13,6 +13,21 @@
    material has actually been applied, so there is never a frame of translucent 10pt text
    sitting unreadable on a wallpaper. No glass, no translucency — not the other way round. */
 
+/* `hidden` has to be enforced, not assumed.
+
+   The UA sheet's `[hidden] { display: none }` loses to *any* author `display` declaration,
+   specificity notwithstanding — so `.chip { display: inline-flex }` and `.field { display: flex }`
+   silently defeated every `el.hidden = true` in `main.js`. The two that mattered: the settings
+   panel offered "Restore built-in" to someone who had never synced anything, and on a platform
+   with no login-item support the start-at-login row stayed on screen as an empty pill. Neither
+   reads as a fault from the code side — the assignment looks like it works.
+
+   `!important` because this has to beat whatever the element's own rule says; that is the whole
+   point of the attribute. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   /* On macOS this MUST equal CARD_RADIUS in src-tauri/src/popover.rs: the native glass view is
      given that radius and draws its own rounded corner, so any disagreement shows up as a halo
@@ -107,8 +122,8 @@ body {
      be a second blur fighting the first one; without it, there is nothing behind to blur. */
 
   /* The window is a fixed 320x470 and `resizable(false)`, and the content is taller than that
-     as soon as the settings panel opens — 812px of content against a 468px card, measured rather
-     than estimated. Without this the overflow was simply cut off by
+     as soon as the settings panel opens — 812px of content against a 468px card, and that is a
+     measured number rather than an estimate. Without this the overflow was simply cut off by
      `html, body { overflow: hidden }`: the price-data row, the "check for updates" button and
      the "restore built-in" button all sat below y=470 and could not be reached at all. The
      whole price-sync feature was invisible, and a missing control does not read as a bug — it

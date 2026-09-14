@@ -130,12 +130,23 @@ pub fn local_day_and_clock(
 
 /// `UTC+08:00`, or `UTC` at zero — used to label the popover's schedule column.
 /// Numeric, so locale-independent.
+/// `UTC+08:00`, `UTC-05:00`, or plain `UTC`.
+///
+/// **The one renderer for offsets.** `engine.rs` used to carry its own copy that padded the
+/// hour differently, so a synced config without a `referenceLabel` could put `UTC+8:00` beside
+/// the viewer's `UTC+08:00` in the same panel.
+///
+/// `unsigned_abs`, not `abs`: `i32::MIN.abs()` overflows. That panics in a debug build, and in
+/// release it wraps back to `i32::MIN` and renders `UTC--35791394:-8` — a string that looks
+/// like a timezone. The value arrives from a config file, i.e. from the untrusted side, so
+/// neither outcome is acceptable. `compile` now rejects the range outright; this stays total
+/// anyway, because a formatter that can panic is a formatter that will.
 pub fn render_offset(minutes: i32) -> String {
     if minutes == 0 {
         return "UTC".to_string();
     }
     let sign = if minutes < 0 { '-' } else { '+' };
-    let abs = minutes.abs();
+    let abs = minutes.unsigned_abs();
     format!("UTC{}{:02}:{:02}", sign, abs / 60, abs % 60)
 }
 

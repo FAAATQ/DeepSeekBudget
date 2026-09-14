@@ -597,3 +597,135 @@ fn fake_now_parsing_rejects_nonsense_with_a_useful_message() {
     assert!(message.contains("DEEPSEEKBUDGET_FAKE_NOW"));
     assert!(message.contains("RFC 3339"));
 }
+
+// ---------------------------------------------------------------------------
+// Boundaries that only bite when a rule is written in more than one piece
+// ---------------------------------------------------------------------------
+
+/// Two peak windows written back to back are one four-hour peak, and the countdown must say so.
+///
+/// The regression: `next_transition` looked at each window's start and end independently and
+/// took the earliest one after `now`. With `01:00-02:00` followed by `02:00-04:00`, window one's
+/// *end* and window two's *start* are the same instant, and the end was reported as a change to
+/// off-peak — a 30-minute countdown to a tier change that never happens. `state_at` disagreed
+/// with it the whole time; only the countdown, the number this app exists to show, was wrong.
+#[test]
+fn adjacent_windows_do_not_report_a_transition_that_never_happens() {
+    let s = synthetic(vec![Weekday::Mon], vec![("01:00", "02:00"), ("02:00", "04:00")]);
+    let at = |h: u32, m: u32| utc(2026, 9, 14, h, m, 0);
+
+    // Mid-first-window: still peak, and the next real change is 04:00.
+    assert_eq!(s.state_at(at(1, 30)), PriceState::Peak);
+    let next = s.next_transition(at(1, 30)).expect("there is a boundary at 04:00");
+    assert_eq!(next.at_utc, at(4, 0));
+    assert_eq!(next.state, PriceState::OffPeak);
+
+    // And the state the transition promises is the state that actually holds there.
+    assert_eq!(s.state_at(next.at_utc), next.state);
+
+    // The seam itself is peak — the half-open rule puts 02:00 inside the second window.
+    assert_eq!(s.state_at(at(2, 0)), PriceState::Peak);
+}
+
+/// The same rule written as one window must agree with the two-piece version everywhere.
+#[test]
+fn a_split_window_and_a_whole_window_agree() {
+    let split = synthetic(vec![Weekday::Mon], vec![("01:00", "02:00"), ("02:00", "04:00")]);
+    let whole = synthetic(vec![Weekday::Mon], vec![("01:00", "04:00")]);
+
+    for minute in (0..24 * 60).step_by(7) {
+        let t = utc(2026, 9, 14, 0, 0, 0) + Duration::minutes(minute);
+        assert_eq!(split.state_at(t), whole.state_at(t), "state differs at {t}");
+        assert_eq!(
+            split.next_transition(t).map(|x| x.at_utc),
+            whole.next_transition(t).map(|x| x.at_utc),
+            "next transition differs at {t}"
+        );
+    }
+}
+
+/// A window fully swallowed by another (`02:00-03:00` inside `01:00-04:00`) adds no boundary.
+#[test]
+fn a_window_swallowed_by_another_adds_no_boundary() {
+    let s = synthetic(vec![Weekday::Mon], vec![("01:00", "04:00"), ("02:00", "03:00")]);
+    let at = |h: u32| utc(2026, 9, 14, h, 30, 0);
+
+    for h in [0, 1, 2] {
+        let expected = if h == 0 { PriceState::OffPeak } else { PriceState::Peak };
+        assert_eq!(s.state_at(at(h)), expected, "state at {h}:30");
+        let next = s.next_transition(at(h)).unwrap();
+        // From outside the peak the next change is the peak *starting*; from inside it, the
+        // peak ending. The nested window at 02:00-03:00 never becomes the answer either way,
+        // which is the point — it adds no boundary.
+        let (want_at, want_state) = if h == 0 {
+            (utc(2026, 9, 14, 1, 0, 0), PriceState::Peak)
+        } else {
+            (utc(2026, 9, 14, 4, 0, 0), PriceState::OffPeak)
+        };
+        assert_eq!(next.at_utc, want_at, "next from {h}:30");
+        assert_eq!(next.state, want_state, "state promised from {h}:30");
+        assert_eq!(s.state_at(next.at_utc), next.state, "and it holds there");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Configs that compile but cannot mean anything
+// ---------------------------------------------------------------------------
+
+/// A rule with no weekdays can never match. Before this it compiled, and produced a schedule
+/// that is off-peak forever and has no boundary to count down to — the same outcome `NoRules`
+/// rejects, expressed the other way round.
+#[test]
+fn a_rule_with_no_days_is_rejected() {
+    let err = CompiledSchedule::compile(&ScheduleConfig {
+        reference_utc_offset_minutes: 0,
+        reference_label: None,
+        weekly: vec![WeeklyRule {
+            days: vec![],
+            windows: vec![("01:00".to_string(), "04:00".to_string())],
+        }],
+    })
+    .unwrap_err();
+    assert!(matches!(err, ScheduleError::EmptyDays), "got {err:?}");
+}
+
+fn one_rule_at_offset(minutes: i32) -> Result<CompiledSchedule, ScheduleError> {
+    CompiledSchedule::compile(&ScheduleConfig {
+        reference_utc_offset_minutes: minutes,
+        reference_label: None,
+        weekly: vec![WeeklyRule {
+            days: vec![Weekday::Mon],
+            windows: vec![("01:00".to_string(), "04:00".to_string())],
+        }],
+    })
+}
+
+/// The offset used to reach `i32::MIN.abs()`, which overflows: a panic in debug, and the
+/// plausible-looking label `UTC--35791394:-8` in release. Rejected outright now.
+#[test]
+fn an_impossible_utc_offset_is_rejected() {
+    for minutes in [i32::MIN, -721, 841, i32::MAX] {
+        let err = one_rule_at_offset(minutes).unwrap_err();
+        assert!(
+            matches!(err, ScheduleError::AbsurdOffset { .. }),
+            "{minutes} gave {err:?}"
+        );
+    }
+    // The whole inhabited range still compiles.
+    for minutes in [-720, -480, 0, 480, 840] {
+        assert!(one_rule_at_offset(minutes).is_ok(), "{minutes} should be allowed");
+    }
+}
+
+/// The formatter stays total even where `compile` would have refused — a formatter that can
+/// panic is a formatter that will. It also pads the hour like the viewer's zone label, which
+/// the engine's own deleted copy did not: `UTC+8:00` used to sit beside `UTC+08:00`.
+#[test]
+fn the_offset_formatter_never_panics_and_pads_like_the_viewer_zone() {
+    for minutes in [i32::MIN, i32::MAX, -1, 1, 0] {
+        let _ = crate::display::render_offset(minutes);
+    }
+    assert_eq!(crate::display::render_offset(480), "UTC+08:00");
+    assert_eq!(crate::display::render_offset(-300), "UTC-05:00");
+    assert_eq!(crate::display::render_offset(0), "UTC");
+}

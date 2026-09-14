@@ -434,29 +434,53 @@ $("reset-button").addEventListener("click", restoreBuiltIn);
 
 // Click the currency chip to cycle — the switch sits next to the numbers it changes, which is
 // where someone looks for it.
+/// Apply a settings change, and put the control back if Rust refuses it.
+///
+/// Without this a rejection left the panel **lying**: a `<select>` has already committed the
+/// user's choice to the DOM by the time the `await` fails, so the control showed the new value
+/// while the engine still held the old one — no message, no revert, and nothing on
+/// `state-changed` re-renders these, so the mismatch survived until the panel was reopened.
+///
+/// The revert is by value rather than by re-rendering, because re-rendering is what failed.
+async function applySetting(control, command, args, restore) {
+  try {
+    render(await invoke(command, args));
+    // The language row is written by `renderAutostart`, which neither `render` nor
+    // `refreshSettings` reaches — so switching language used to leave "On"/"Off" and the
+    // platform hint in the language you had just left.
+    if (command === "set_language") await refreshAutostart();
+  } catch (error) {
+    if (control) control.value = restore;
+    setSyncNote(t("updateFailed", messageOf(error)), "bad");
+  }
+  await refreshSettings();
+}
+
 $("currency-toggle").addEventListener("click", async () => {
   const currencies = latestView?.availableCurrencies ?? [];
   if (currencies.length < 2) return;
   const next = currencies[(currencies.indexOf(latestView.currency) + 1) % currencies.length];
-  render(await invoke("set_currency", { currency: next }));
-  await refreshSettings();
+  await applySetting(null, "set_currency", { currency: next }, null);
 });
 
 $("language-select").addEventListener("change", async (event) => {
   const tag = event.target.value;
-  render(await invoke("set_language", { language: tag === "" ? null : tag }));
-  await refreshSettings();
+  await applySetting(event.target, "set_language", { language: tag === "" ? null : tag }, tag);
 });
 
 $("currency-select").addEventListener("change", async (event) => {
-  render(await invoke("set_currency", { currency: event.target.value }));
-  await refreshSettings();
+  const value = event.target.value;
+  await applySetting(event.target, "set_currency", { currency: value }, value);
 });
 
 $("timezone-select").addEventListener("change", async (event) => {
   const raw = event.target.value;
-  render(await invoke("set_timezone_offset", { minutes: raw === "" ? null : Number(raw) }));
-  await refreshSettings();
+  await applySetting(
+    event.target,
+    "set_timezone_offset",
+    { minutes: raw === "" ? null : Number(raw) },
+    raw
+  );
 });
 
 $("auto-check-select").addEventListener("change", async (event) => {
@@ -498,6 +522,21 @@ async function runAutoCheck() {
 /// Rust sets a flag when it asks, and emits an event. The event is the path for a panel that is
 /// already open; this is the path for the far more common case, where the tick loop created the
 /// window and asked in the same breath — before `main.js` had run far enough to be listening.
+/// Honour a panel the tray menu asked for before this page existed.
+///
+/// The popover is created lazily, and the Settings/About menu items *are* a way to create it —
+/// so on the first use there is nothing to emit to, and the emit is dropped. Rust records the
+/// request as well; this is where it is picked up. One-shot, like `take_auto_check`.
+async function collectPanelRequest() {
+  const request = await invoke("take_panel_request").catch(() => null);
+  if (!request) return;
+  if (request === "settings") setSettingsOpen(true);
+  if (request === "about") {
+    setSettingsOpen(false);
+    $("about-panel").hidden = false;
+  }
+}
+
 /// Collecting on boot is what makes the scheduled check land at all; `take_auto_check` clears the
 /// flag, so the two paths together still produce exactly one check.
 async function collectAutoCheck() {
@@ -538,9 +577,18 @@ document.addEventListener("keydown", (event) => {
 
 listen("state-changed", (event) => render(event.payload));
 
-listen("open-settings", () => setSettingsOpen(true));
+// Both handlers clear the pending record as well as acting on it. Rust sets that record
+// whenever the tray menu asks for a panel, because on the first use there is no window to emit
+// to and the event is dropped. Clearing it here is what keeps a request handled *now* from
+// being replayed on the next launch — a page that is up hears the event, a page that is still
+// loading collects the record on boot, and between them exactly one of the two fires.
+listen("open-settings", async () => {
+  await invoke("take_panel_request").catch(() => {});
+  setSettingsOpen(true);
+});
 
-listen("open-about", () => {
+listen("open-about", async () => {
+  await invoke("take_panel_request").catch(() => {});
   setSettingsOpen(false);
   $("about-panel").hidden = false;
 });
@@ -552,6 +600,11 @@ listen("open-about", () => {
     await applyEnvironment();
     await refreshSettings();
     await refresh();
+    // Again, now that `render()` has told the dictionary which language the engine rendered in.
+    // `refreshSettings` writes two notes that carry no `data-i18n` — their text is interpolated
+    // — so `I18N.apply()` never revisits them, and a Chinese user read the timezone line and
+    // the last-check line in English for the whole session. One extra call at boot.
+    await refreshSettings();
     renderProviderStatus(await invoke("get_provider_status"));
     // Not part of `render()`: it is not derived from the price state, and re-reading the
     // registry once a minute to redraw a switch nobody touched would be silly.
@@ -565,4 +618,7 @@ listen("open-about", () => {
   // Outside the `try`, and last: this is the only path by which a panel nobody has opened ever
   // fetches anything. A failure while drawing the panel must not also swallow the check.
   await collectAutoCheck();
+
+  // And the same for a panel the tray menu asked for while this page did not yet exist.
+  await collectPanelRequest();
 })();

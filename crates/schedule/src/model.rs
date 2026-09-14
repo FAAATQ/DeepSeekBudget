@@ -216,6 +216,14 @@ pub enum ScheduleError {
     ZeroLengthWindow { start: String, end: String },
     /// The config declared no rules at all.
     NoRules,
+    /// A rule listed no weekdays, so it can never match. A schedule made only of such rules is
+    /// permanently off-peak *and* has no boundary to count down to, which is the same outcome
+    /// `NoRules` rejects — expressed the other way round, so it is rejected the same way.
+    EmptyDays,
+    /// A UTC offset no real zone uses. `-12:00`..`+14:00` is the whole inhabited range;
+    /// anything outside it is a typo, and the large values are worse than typos: `i32::MIN`
+    /// used to overflow in the label formatter.
+    AbsurdOffset { minutes: i32 },
 }
 
 impl std::fmt::Display for ScheduleError {
@@ -232,6 +240,14 @@ impl std::fmt::Display for ScheduleError {
                  use a wrapping window for a full day, or fix the typo"
             ),
             ScheduleError::NoRules => write!(f, "schedule declared no weekly rules"),
+            ScheduleError::EmptyDays => {
+                write!(f, "a schedule rule listed no weekdays, so it can never apply")
+            }
+            ScheduleError::AbsurdOffset { minutes } => write!(
+                f,
+                "referenceUtcOffsetMinutes is {minutes}; real zones run from -720 (-12:00) \
+                 to 840 (+14:00)"
+            ),
         }
     }
 }
