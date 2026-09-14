@@ -21,7 +21,7 @@
 
 | 平台 | 产物 | 说明 |
 |---|---|---|
-| **Windows** | `deepseek-budget.exe` | 免安装绿色版 —— 直接运行，托盘图标就出现了。依赖 WebView2，Windows 11 与较新的 Windows 10 已内置。**v0.3.2 里暂时还没有 Windows 构建** —— 先取 [v0.3.1](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.1) 那份。 |
+| **Windows** | `deepseek-budget.exe` | 免安装绿色版 —— 直接运行，托盘图标就出现了。依赖 WebView2，Windows 11 与较新的 Windows 10 已内置。 |
 | **macOS** | `DeepSeek Budget.app` | 拖到任何地方双击即可。构建是 ad-hoc 签名的，首次打开需要 **系统设置 → 隐私与安全性 → 仍要打开**。 |
 
 两个平台都不需要管理员权限，也都不在自己目录之外安装任何东西 —— 这也是它们都能提供

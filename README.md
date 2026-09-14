@@ -23,7 +23,7 @@ Grab the latest build from the **[Releases page](https://github.com/FAAATQ/DeepS
 
 | Platform | Artifact | Notes |
 |---|---|---|
-| **Windows** | `deepseek-budget.exe` | Portable, **no installer** — run it and the tray icon appears. Needs WebView2, which ships with Windows 11 and current Windows 10. **The Windows build is not in v0.3.2 yet** — take it from [v0.3.1](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.1) for now. |
+| **Windows** | `deepseek-budget.exe` | Portable, **no installer** — run it and the tray icon appears. Needs WebView2, which ships with Windows 11 and current Windows 10. |
 | **macOS** | `DeepSeek Budget.app` | Drag it anywhere and double-click. The build is ad-hoc signed, so the first launch needs **System Settings → Privacy & Security → Open Anyway**. |
 
 Neither platform needs admin rights, and neither installs anything outside its own folder — which

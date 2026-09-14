@@ -1,5 +1,46 @@
 # Changelog
 
+## v0.3.3 — 2026-09-14
+
+A review pass over the whole codebase. Nothing new to look at — this release is about the places
+where the app was quietly saying something untrue.
+
+### Fixed
+
+- **The panel could open on the wrong display.** Finding the screen the tray icon sits on meant
+  converting a point between coordinate systems, and the two platforms disagree about which one
+  the tray hands you — Windows gives physical pixels, macOS gives logical points. The conversion
+  was applied unconditionally, so on any display that is not at 100% scale the point landed
+  somewhere else. Single-monitor setups mostly got away with it; a mixed-DPI desk did not. The
+  conversion is gone — the lookup is now done in the one unit both platforms agree on.
+- **"Next change" could name a moment when nothing changes.** Windows that touch or overlap produce
+  a boundary at the join, and the panel was reporting it as a transition — so the countdown ran to
+  zero and the price was the same on the other side. A boundary is now only reported when the tier
+  actually differs across it.
+- **The settings panel offered "Restore built-in" to someone who had never synced anything**, and
+  **the start-at-login row appeared as an empty pill** on platforms where it does not apply. Both
+  are `hidden` attributes that were being overruled by the element's own `display` rule — the code
+  read as correct, and the attribute silently did nothing. Same fix for the error line.
+- **A setting that failed to save showed the new value anyway.** If writing the setting failed, the
+  control kept displaying your choice as though it had taken, and the failure was swallowed. It now
+  reverts to what is actually stored and says what went wrong.
+- **The first click on Settings or About from the tray menu could do nothing.** The menu event and
+  the panel's listener are not ordered, so the request could be raised before anything was
+  listening and then never delivered.
+- **Switching language did not refresh the start-at-login row**, leaving it in the previous
+  language until the panel was reopened.
+- **A malformed remote config could crash the engine instead of being rejected.** A timezone offset
+  far outside the real range overflowed while being formatted. It is now rejected during
+  validation, like every other untrusted field — the config is not applied and the app keeps
+  running on the built-in schedule.
+- **A config with an empty weekday list was accepted**, producing a schedule that had no peak hours
+  at all — the app would have shown a permanent off-peak price. Now rejected.
+- **The daily price sync could pick up the wrong numbers** from DeepSeek's pricing page. The parser
+  now only reads the sentence that states the peak hours, and refuses to produce a config if it
+  produces more windows than DeepSeek has.
+
+---
+
 ## v0.3.2 — the prices keep themselves fresh (2026-09-13)
 
 **The problem.** One-click sync solved "a price change should not need a release". It did not
