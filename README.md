@@ -19,16 +19,31 @@ The icon is the DeepSeek whale in one of three colours — **blue** off-peak, **
 
 ## Install
 
-Download the build for your platform:
+All four builds are in **[v0.3.3](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.3)**.
 
 | Platform | Artifact | Notes |
 |---|---|---|
-| **Windows** — [v0.3.3](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.3) | `deepseek-budget.exe` | Portable, **no installer** — run it and the tray icon appears. Needs WebView2, which ships with Windows 11 and current Windows 10. |
-| **macOS** — [v0.3.2](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.2) | `DeepSeek Budget.app` | Drag it anywhere and double-click. The build is ad-hoc signed, so the first launch needs **System Settings → Privacy & Security → Open Anyway**. |
+| **Windows 10/11 (x64)** | `deepseek-budget.exe` | Portable, **no installer** — run it and the tray icon appears. Needs WebView2, which ships with Windows 11 and current Windows 10. |
+| **macOS — Apple Silicon** | `deepseek-budget-macos-arm64.zip` | For **M1/M2/M3/M4** Macs. The smallest download. |
+| **macOS — Intel** | `deepseek-budget-macos-x86_64.zip` | For Macs with an **Intel Core** processor. |
+| **macOS — Universal** | `deepseek-budget-macos-universal.zip` | Runs on **both**. Take this one if you would rather not find out which Mac you have. |
 
-**Why two different version numbers?** The macOS packages can only be built on a Mac, and the
-v0.3.3 ones are not up yet. So Mac users get v0.3.2 — it works, but it does **not** contain the
-fixes listed in v0.3.3.
+**All three macOS builds are the same app** — same version, same source, just different machine code
+inside. Unzip and run `DeepSeek Budget.app` wherever you put it; there is no installer.
+
+**Which Mac do I have?** → About This Mac → look at **Chip**. "Apple M…" means arm64, "Intel Core…"
+means x86_64. If you pick wrong, macOS simply refuses to open it — no damage done.
+
+### Gatekeeper
+
+None of the macOS builds are signed with an Apple Developer certificate or notarised. On first
+launch macOS will refuse to open the app. Either **right-click the app → Open**, or:
+
+```bash
+xattr -dr com.apple.quarantine "DeepSeek Budget.app"
+```
+
+That is the one step a portable app cannot avoid on macOS.
 
 Neither platform needs admin rights, and neither installs anything outside its own folder — which
 is also why both can offer a login item.

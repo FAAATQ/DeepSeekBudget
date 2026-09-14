@@ -17,15 +17,31 @@
 
 ## 安装
 
-按平台下载：
+四份都在 **[v0.3.3](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.3)** 里。
 
 | 平台 | 产物 | 说明 |
 |---|---|---|
-| **Windows** — [v0.3.3](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.3) | `deepseek-budget.exe` | 免安装绿色版 —— 直接运行，托盘图标就出现了。依赖 WebView2，Windows 11 与较新的 Windows 10 已内置。 |
-| **macOS** — [v0.3.2](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.2) | `DeepSeek Budget.app` | 拖到任何地方双击即可。构建是 ad-hoc 签名的，首次打开需要 **系统设置 → 隐私与安全性 → 仍要打开**。 |
+| **Windows 10/11 (x64)** | `deepseek-budget.exe` | 免安装绿色版 —— 直接运行，托盘图标就出现了。依赖 WebView2，Windows 11 与较新的 Windows 10 已内置。 |
+| **macOS — Apple 芯片** | `deepseek-budget-macos-arm64.zip` | 适用于 **M1/M2/M3/M4**。体积最小。 |
+| **macOS — Intel** | `deepseek-budget-macos-x86_64.zip` | 适用于 **Intel Core** 处理器的 Mac。 |
+| **macOS — Universal** | `deepseek-budget-macos-universal.zip` | 两种都能跑。懒得查自己是哪种就选它。 |
 
-**为什么两个版本号不一样？** macOS 的包只能在 Mac 上构建，v0.3.3 那份还没出。所以 Mac 用户
-拿到的是 v0.3.2 —— 能用，但**不包含** v0.3.3 里的那些修复。
+**三份 macOS 包是同一个 app** —— 同版本、同源码，只是里面的机器码不同。解压后把
+`DeepSeek Budget.app` 拖到任何地方运行即可，没有安装器。
+
+**我是哪种 Mac？** → 关于本机 → 看**芯片**。「Apple M…」是 arm64，「Intel Core…」是 x86_64。
+选错了 macOS 只会拒绝打开，不会造成任何损坏。
+
+### Gatekeeper
+
+三份 macOS 包都没有 Apple 开发者证书签名，也没有公证。首次打开时 macOS 会拒绝。要么
+**右键点 app → 打开**，要么：
+
+```bash
+xattr -dr com.apple.quarantine "DeepSeek Budget.app"
+```
+
+这是绿色 app 在 macOS 上唯一绕不开的一步。
 
 两个平台都不需要管理员权限，也都不在自己目录之外安装任何东西 —— 这也是它们都能提供
 开机自启的原因。
