@@ -7,8 +7,14 @@ mismatch between the camelCase field names Rust emits and the ones `ui/main.js` 
 produce a blank or half-empty panel that no unit test would catch.
 
 So this composes a standalone page out of the *actual* `ui/index.html`, `ui/styles.css` and
-`ui/main.js` — read at generation time, never copied, so they cannot drift — stubs the two
+`ui/main.js` — read at generation time, never copied, so they cannot drift — stubs the
 `window.__TAURI__` calls the UI makes, and hands the result to headless Chrome.
+
+**Every stubbed command has to exist here.** `main.js` grew calls this script did not know
+about, and the fallthrough `return null` made the panel render as an error banner reading
+`Cannot read properties of null (reading 'sourceLabel')` — the preview had been quietly
+broken since the price-sync release. The stub is now derived from the payload and from
+`provider.rs`, and it fails loudly on an unknown command rather than returning null.
 
 Usage:
     python3 tools/make-preview.py <payload.json> <out.html> [--dark]
@@ -36,6 +42,21 @@ def read(relative_path):
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, relative_path), encoding="utf-8") as handle:
         return handle.read()
+
+
+def read_update_url():
+    """The real URL constant out of provider.rs, for the same reason the UI files are read.
+
+    The frontend is *handed* this by Rust rather than knowing it (`core::ProviderStatusView`),
+    so a copy here would be a second source of truth for a value whose whole point is that
+    there is only one.
+    """
+    match = re.search(
+        r'pub const UPDATE_URL: &str =\s*"([^"]+)"', read("src-tauri/src/provider.rs")
+    )
+    if not match:
+        sys.exit("could not find UPDATE_URL in src-tauri/src/provider.rs")
+    return match.group(1)
 
 
 def host_platform():
@@ -84,6 +105,24 @@ def extract_body(html):
         sys.exit("ui/index.html has no <body>")
     # The real page loads main.js as an external file; the preview inlines it instead.
     return re.sub(r'\s*<script src="main\.js"></script>', "", match.group(1))
+
+
+def stub_provider_status(view):
+    """Mirror what `core::provider_status` returns, derived from the payload.
+
+    `synced` is read off the rendered provenance label rather than guessed. The engine owns
+    that string (`view.rs` is the single source of user-facing text), so this compares against
+    both languages' word for the bundled copy instead of duplicating the format.
+    """
+    label = view.get("configSourceLabel") or ""
+    bundled = any(word in label for word in ("Built-in", "内置"))
+    return {
+        "updateUrl": read_update_url(),
+        "synced": bool(label) and not bundled,
+        "sourceLabel": label,
+        "verifiedAt": view.get("verifiedAt") or "",
+        "notice": None,
+    }
 
 
 def stub_settings(view):
@@ -146,6 +185,7 @@ const VIEW = {json.dumps(view)};
 const SETTINGS = {json.dumps(stub_settings(view))};
 const ENVIRONMENT = {{ glass: false, platform: "{host_platform()}" }};
 const AUTOSTART = {{ enabled: false, blocked: false, supported: true, error: null }};
+const PROVIDER_STATUS = {json.dumps(stub_provider_status(view))};
 window.__TAURI__ = {{
   core: {{
     invoke: async (cmd) => {{
@@ -153,7 +193,11 @@ window.__TAURI__ = {{
       if (cmd === "get_settings") return SETTINGS;
       if (cmd === "get_environment") return ENVIRONMENT;
       if (cmd === "get_autostart") return AUTOSTART;
-      return null;
+      if (cmd === "get_provider_status") return PROVIDER_STATUS;
+      // Anything else is a command this stub has not been taught. Returning null would
+      // render as a half-empty panel that looks like a real bug — which is exactly what
+      // happened. Fail where the next person will see it.
+      throw new Error(`make-preview.py: unstubbed command ${{cmd}}`);
     }},
   }},
   event: {{ listen: async () => () => {{}} }},

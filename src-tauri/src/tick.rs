@@ -35,7 +35,11 @@ const PANIC_BACKOFF: Duration = Duration::from_secs(30);
 
 pub fn spawn(app: AppHandle) {
     std::thread::spawn(move || loop {
-        let sleep_for = match catch_unwind(AssertUnwindSafe(|| refresh(&app))) {
+        let sleep_for = match catch_unwind(AssertUnwindSafe(|| {
+            let sleep_for = refresh(&app);
+            auto_check_if_due(&app);
+            sleep_for
+        })) {
             Ok(duration) => duration,
             Err(_) => {
                 // Unwinding is enabled on purpose (see the workspace release profile) so that
@@ -46,6 +50,35 @@ pub fn spawn(app: AppHandle) {
         };
         std::thread::sleep(sleep_for);
     });
+}
+
+/// Ask the popover to go and look for new figures, if the schedule says it is time.
+///
+/// Rides on this loop rather than owning a timer of its own. The loop is already guaranteed to
+/// run at least once a minute — that cap exists so a laptop suspended across a price boundary
+/// wakes up to a correct icon — which is the same property a daily check needs, three orders of
+/// magnitude coarser. A second timer would be a second thing that can stop.
+///
+/// Infallible, like everything else on this thread: the worst case is that the check does not
+/// happen this minute and is tried again on the next one.
+fn auto_check_if_due(app: &AppHandle) {
+    let due = {
+        let state = app.state::<Mutex<AppCore>>();
+        let core = match state.lock() {
+            Ok(core) => core,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let interval = crate::core::auto_check_interval(core.settings.auto_check_hours);
+        crate::core::auto_check_due(
+            core.clock.now_utc(),
+            core.settings.last_auto_check.as_deref(),
+            interval,
+        )
+    };
+
+    if due {
+        crate::popover::auto_check(app);
+    }
 }
 
 /// Recompute, update the tray if anything changed, notify the popover, and report how long

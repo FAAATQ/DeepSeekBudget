@@ -97,6 +97,18 @@
           </button>
         </div>
         <p class="fineprint" id="sync-note" data-i18n="syncHint"></p>
+
+        <!--
+          How often the app goes and looks on its own. A `select` whose options come from Rust
+          (`autoCheckChoices`), so the list and the default live in one place rather than being
+          restated here. The label carries no `data-i18n` because `renderAutoCheck` writes the
+          note from the current state on every render, the same reason the autostart row does not.
+        -->
+        <label class="field">
+          <span data-i18n="autoCheck">Check for updates</span>
+          <select id="auto-check-select"></select>
+        </label>
+        <p class="fineprint" id="auto-check-note"></p>
       </section>
 
       <!-- About, from the tray menu -->

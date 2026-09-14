@@ -28,6 +28,14 @@ const SETTINGS_FILE: &str = "settings.json";
 /// default" is the recommended choice and is what almost everyone should use.
 const TIMEZONE_CHOICES: &[i32] = &[0, 480, 540, 420, 330, 60, -300, -480, -600];
 
+/// The intervals offered for automatic price checks, in hours. `0` is off.
+///
+/// A short list rather than a free-text field, for the same reason the timezone list is short:
+/// the useful answers are few, and a picker cannot be given a value the app has to defend
+/// against. Daily is the default — the figures are published by someone else, and the whole point
+/// of this app is not to be looking at yesterday's price.
+const AUTO_CHECK_HOURS: &[u32] = &[0, 6, 12, 24, 72];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -40,6 +48,65 @@ pub struct Settings {
     /// Interface language tag (`"zh"` / `"en"`). `None` follows the system language.
     #[serde(default)]
     pub language: Option<String>,
+    /// Hours between automatic price checks. `0` turns them off.
+    ///
+    /// Defaults to 24. The figures are published by someone else, and going stale is the one
+    /// failure this app exists to prevent — so the app goes and looks, rather than waiting to be
+    /// asked. This is a deliberate revision of hard constraint 5, which used to read "only a user
+    /// click sends a request". **Its structural half is untouched**: the request still goes
+    /// through the webview's `fetch`, the Rust tree still contains no HTTP client, and the CSP
+    /// still permits exactly one origin. What changed is who decides *when*. See
+    /// docs/design/architecture.md §7 for the cost that was accepted.
+    #[serde(default = "default_auto_check_hours")]
+    pub auto_check_hours: u32,
+    /// When the last automatic check finished, as RFC 3339. `None` means never — and never
+    /// counts as due, so a fresh install gets today's figures instead of waiting a day.
+    #[serde(default)]
+    pub last_auto_check: Option<String>,
+}
+
+/// The default interval, named so `serde` and `Default` cannot drift apart.
+fn default_auto_check_hours() -> u32 {
+    24
+}
+
+/// How long to wait between automatic checks.
+///
+/// Development affordance, in the same family as `DEEPSEEKBUDGET_FAKE_NOW`: without it this
+/// feature can only be tested by waiting a day, which means it would never be tested. Takes a
+/// number of **seconds** — `DEEPSEEKBUDGET_AUTOCHECK_SECONDS=5` makes the whole path observable
+/// in five seconds. A typo is warned about rather than obeyed, like every other one of these.
+pub const AUTOCHECK_ENV: &str = "DEEPSEEKBUDGET_AUTOCHECK_SECONDS";
+
+/// The interval in force, environment override included. A zero interval means "off", which is
+/// how the setting spells it too.
+pub fn auto_check_interval(hours: u32) -> chrono::Duration {
+    if let Ok(raw) = std::env::var(AUTOCHECK_ENV) {
+        match raw.trim().parse::<i64>() {
+            Ok(seconds) if seconds >= 0 => return chrono::Duration::seconds(seconds),
+            _ => eprintln!("{APP_NAME}: ignoring {AUTOCHECK_ENV}=\"{raw}\" — expected a number"),
+        }
+    }
+    if hours == 0 {
+        return chrono::Duration::zero();
+    }
+    chrono::Duration::hours(i64::from(hours))
+}
+
+/// Whether an automatic check is due.
+///
+/// Pure — `now` is a parameter, never read from the clock — so the boundary can be tested without
+/// waiting a day, for the same reason `engine::state_at` takes `now`. A non-positive interval is
+/// off; a check that has never run is always due, so a fresh install gets today's figures rather
+/// than waiting a day for them.
+pub fn auto_check_due(now: DateTime<Utc>, last: Option<&str>, interval: chrono::Duration) -> bool {
+    if interval <= chrono::Duration::zero() {
+        return false;
+    }
+    match last.and_then(|stamp| DateTime::parse_from_rfc3339(stamp).ok()) {
+        None => true,
+        Some(when) => now.signed_duration_since(when.with_timezone(&Utc)) >= interval,
+    }
 }
 
 impl Default for Settings {
@@ -48,6 +115,8 @@ impl Default for Settings {
             currency: String::new(),
             timezone_override_minutes: None,
             language: None,
+            auto_check_hours: default_auto_check_hours(),
+            last_auto_check: None,
         }
     }
 }
@@ -92,6 +161,11 @@ pub struct AppCore {
     /// to an opaque background when this is false, rather than pretending glass is there and
     /// leaving 10pt text unreadable over a wallpaper.
     pub glass_applied: bool,
+    /// A scheduled check the tick loop asked for and the webview has not collected yet.
+    ///
+    /// In memory only — it describes "right now", not a user preference. See [`take_auto_check`]
+    /// for why this exists instead of relying on the event alone.
+    pub auto_check_pending: bool,
     pub rendered: Rendered,
     settings_dir: PathBuf,
 }
@@ -144,6 +218,7 @@ impl AppCore {
             clock,
             settings,
             locale,
+            auto_check_pending: false,
             // Flipped to true by `popover` if the native material applies. Defaults to the
             // honest answer: not applied yet.
             glass_applied: false,
@@ -258,6 +333,25 @@ impl AppCore {
             }))
             .collect(),
 
+            auto_check_hours: self.settings.auto_check_hours,
+            auto_check_choices: AUTO_CHECK_HOURS
+                .iter()
+                .map(|hours| AutoCheckChoice {
+                    hours: *hours,
+                    label: if *hours == 0 {
+                        self.locale.pick("关闭", "Off").to_string()
+                    } else {
+                        self.locale
+                            .pick(
+                                &format!("每 {hours} 小时"),
+                                &format!("Every {hours} hours"),
+                            )
+                            .to_string()
+                    },
+                })
+                .collect(),
+            last_auto_check: self.settings.last_auto_check.clone(),
+
             language: self.settings.language.clone(),
             resolved_language: self.locale.tag().to_string(),
             // Language names are always shown in their own language — a picker you cannot
@@ -370,6 +464,23 @@ pub struct SettingsView {
     /// The tag actually in force, after resolving "follow system".
     pub resolved_language: String,
     pub language_choices: Vec<LanguageChoice>,
+
+    /// Hours between automatic price checks; `0` is off.
+    pub auto_check_hours: u32,
+    /// The intervals the settings panel offers, so the list lives in Rust with the default
+    /// rather than being duplicated in the frontend.
+    pub auto_check_choices: Vec<AutoCheckChoice>,
+    /// When the last automatic check finished, RFC 3339. Shown so the user can tell "nothing has
+    /// changed" apart from "it has not looked".
+    pub last_auto_check: Option<String>,
+}
+
+/// One row of the automatic-check picker. `hours: 0` is the "off" row.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoCheckChoice {
+    pub hours: u32,
+    pub label: String,
 }
 
 /// Facts about the runtime that the UI needs in order to render honestly.
@@ -420,6 +531,69 @@ pub fn get_view(core: State<'_, Mutex<AppCore>>) -> Result<StateView, String> {
 #[tauri::command]
 pub fn get_settings(core: State<'_, Mutex<AppCore>>) -> Result<SettingsView, String> {
     Ok(lock(&core)?.settings_view())
+}
+
+/// Change how often the app goes and looks for new figures by itself.
+///
+/// `0` restores the older behaviour exactly: the app then makes a network request only when the
+/// user presses the button. Anything not on the list is refused rather than clamped, so a bad
+/// value cannot silently become a different interval than the one the panel shows.
+#[tauri::command]
+pub fn set_auto_check_hours(
+    hours: u32,
+    core: State<'_, Mutex<AppCore>>,
+) -> Result<SettingsView, String> {
+    if !AUTO_CHECK_HOURS.contains(&hours) {
+        return Err(format!("{hours} is not an offered interval"));
+    }
+    let mut core = lock(&core)?;
+    core.settings.auto_check_hours = hours;
+    core.persist();
+    Ok(core.settings_view())
+}
+
+/// Record that an automatic check finished, and hand the webview back.
+///
+/// The timestamp is written **whatever the outcome**. A machine that is offline every time the
+/// timer fires would otherwise retry on every tick — which is precisely the polling this app
+/// promised not to do. One attempt per interval, successful or not.
+///
+/// The outcome is not stored: a failed check changes nothing the user can act on, and the figures
+/// on screen already carry their own provenance label (`built-in · 2026-09-12`).
+/// Collect a scheduled check the tick loop asked for. Returns whether there was one, and clears
+/// the flag so one request can never produce two checks.
+///
+/// The event alone is not a handshake. `popover::auto_check` emits `auto-check` the instant the
+/// hidden window is created, but creating a webview only *starts* a page load — the listener is
+/// registered when `main.js` runs, hundreds of milliseconds later. An event emitted in that gap is
+/// delivered to nobody, and it fails silently, because "no listener yet" is indistinguishable from
+/// "the check ran and had nothing to do".
+///
+/// A flag the page collects when it boots closes that window without polling, and it is strictly
+/// better than the event rather than a companion to it: whichever arrives first wins, and the
+/// `swap` makes the second a no-op.
+#[tauri::command]
+pub fn take_auto_check(core: State<'_, Mutex<AppCore>>) -> Result<bool, String> {
+    let mut core = lock(&core)?;
+    Ok(std::mem::replace(&mut core.auto_check_pending, false))
+}
+
+#[tauri::command]
+pub fn record_auto_check(
+    ok: bool,
+    app: AppHandle,
+    core: State<'_, Mutex<AppCore>>,
+) -> Result<(), String> {
+    {
+        let mut core = lock(&core)?;
+        core.settings.last_auto_check = Some(core.clock.now_utc().to_rfc3339());
+        core.persist();
+    }
+    if !ok {
+        eprintln!("{APP_NAME}: the scheduled price check did not go through");
+    }
+    crate::popover::release_after_auto_check(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -548,6 +722,76 @@ fn lock<'a>(
 mod tests {
     use super::*;
 
+    fn at(stamp: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(stamp).unwrap().with_timezone(&Utc)
+    }
+
+    /// The default is what makes the feature exist at all: a fresh install checks on its own
+    /// rather than waiting a day to be asked.
+    #[test]
+    fn a_check_that_has_never_run_is_due() {
+        assert!(auto_check_due(at("2026-09-13T12:00:00Z"), None, auto_check_interval(24)));
+    }
+
+    /// Zero hours is off, and stays off — including for a check that has never run, which is the
+    /// case that would otherwise fire immediately and make "off" mean "once".
+    #[test]
+    fn zero_hours_is_off_even_before_the_first_check() {
+        assert_eq!(auto_check_interval(0), chrono::Duration::zero());
+        assert!(!auto_check_due(at("2026-09-13T12:00:00Z"), None, auto_check_interval(0)));
+        assert!(!auto_check_due(
+            at("2026-09-13T12:00:00Z"),
+            Some("2020-01-01T00:00:00Z"),
+            auto_check_interval(0)
+        ));
+    }
+
+    /// The boundary is inclusive, and the interval is what the setting says it is — the same
+    /// discipline the peak/off-peak boundary is held to.
+    #[test]
+    fn the_interval_flips_exactly_at_the_reported_boundary() {
+        let last = "2026-09-13T00:00:00Z";
+        let interval = auto_check_interval(24);
+
+        assert!(!auto_check_due(at("2026-09-13T23:59:59Z"), Some(last), interval));
+        assert!(auto_check_due(at("2026-09-14T00:00:00Z"), Some(last), interval));
+        assert!(auto_check_due(at("2026-09-14T00:00:01Z"), Some(last), interval));
+    }
+
+    /// A timestamp that cannot be parsed counts as "never ran" — a stale or hand-edited settings
+    /// file must not be able to switch the feature off by being unreadable.
+    #[test]
+    fn an_unreadable_timestamp_counts_as_never_having_run() {
+        assert!(auto_check_due(
+            at("2026-09-13T12:00:00Z"),
+            Some("not a timestamp"),
+            auto_check_interval(24)
+        ));
+    }
+
+    /// The interval set by the settings panel is the one that governs. 6 hours is due where 72
+    /// is not, on the same pair of timestamps.
+    #[test]
+    fn the_chosen_interval_governs() {
+        let last = "2026-09-13T00:00:00Z";
+        let now = at("2026-09-13T07:00:00Z");
+
+        assert!(auto_check_due(now, Some(last), auto_check_interval(6)));
+        assert!(!auto_check_due(now, Some(last), auto_check_interval(24)));
+        assert!(!auto_check_due(now, Some(last), auto_check_interval(72)));
+    }
+
+    /// A settings file written before this feature existed loads with the default, not with
+    /// "off" — the same shape as the language field before it.
+    #[test]
+    fn a_settings_file_written_before_auto_check_existed_still_loads() {
+        let settings: Settings =
+            serde_json::from_str(r#"{"currency":"CNY","language":"zh"}"#).unwrap();
+
+        assert_eq!(settings.auto_check_hours, 24);
+        assert_eq!(settings.last_auto_check, None);
+    }
+
     #[test]
     fn an_explicit_language_beats_the_system_one() {
         let mut settings = Settings::default();
@@ -587,6 +831,9 @@ mod tests {
             currency: "USD".to_string(),
             timezone_override_minutes: Some(540),
             language: Some("zh".to_string()),
+            auto_check_hours: 6,
+            last_auto_check: Some("2026-09-13T12:00:00+00:00".to_string()),
+            ..Settings::default()
         };
         let json = serde_json::to_string(&settings).unwrap();
         let back: Settings = serde_json::from_str(&json).unwrap();
@@ -594,6 +841,8 @@ mod tests {
         assert_eq!(back.currency, "USD");
         assert_eq!(back.timezone_override_minutes, Some(540));
         assert_eq!(back.language.as_deref(), Some("zh"));
+        assert_eq!(back.auto_check_hours, 6);
+        assert_eq!(back.last_auto_check.as_deref(), Some("2026-09-13T12:00:00+00:00"));
     }
 
     /// Guards the upgrade path: adding `language` must not invalidate a settings.json written

@@ -48,6 +48,12 @@ window.I18N = (() => {
       startAtLoginBlocked:
         "Windows is holding this off — switch it back on in Task Manager → Startup.",
       startAtLoginFailed: (error) => `Could not change the login item — ${error}`,
+
+      autoCheck: "Check for updates",
+      autoCheckNote:
+        "The prices are published by someone else, so the app goes and looks on its own. Set it to Off and it only checks when you press the button above.",
+      autoCheckLast: (when) => `Last automatic check: ${when}.`,
+      autoCheckNever: "No automatic check has run yet.",
       priceData: "Price data",
       checkUpdate: "Check for updates",
       restoreBuiltIn: "Restore built-in",
@@ -56,8 +62,10 @@ window.I18N = (() => {
       updatedTo: (date) => `Updated · ${date}`,
       restored: "Restored the built-in data",
       updateFailed: (error) => `Update failed — ${error}`,
+      // Deliberately no longer says "only when you ask" — the scheduled check below means that
+      // sentence would be false, and a promise the app cannot keep is worse than a smaller one.
       syncHint:
-        "Fetches the latest published prices and peak hours, only when you ask. Nothing is sent.",
+        "Fetches the published prices and peak hours. Nothing is sent, and no account is involved.",
     },
     zh: {
       prices: "价格",
@@ -86,6 +94,12 @@ window.I18N = (() => {
       startAtLoginHintMac: "以当前用户的 LaunchAgent 写入，不需要安装器，也不需要管理员权限。",
       startAtLoginBlocked: "被 Windows 挡住了 —— 请在 任务管理器 → 启动 里重新打开。",
       startAtLoginFailed: (error) => `无法修改登录项 —— ${error}`,
+
+      autoCheck: "自动检查更新",
+      autoCheckNote:
+        "价格由官方公布，所以这个 app 会自己去看一眼。选「关闭」之后，就只有点上面那个按钮才会检查。",
+      autoCheckLast: (when) => `上次自动检查：${when}。`,
+      autoCheckNever: "还没有自动检查过。",
       priceData: "价格数据",
       checkUpdate: "检查更新",
       restoreBuiltIn: "恢复内置数据",
@@ -94,7 +108,7 @@ window.I18N = (() => {
       updatedTo: (date) => `已更新 · ${date}`,
       restored: "已恢复内置数据",
       updateFailed: (error) => `更新失败 —— ${error}`,
-      syncHint: "获取官方最新价格与峰谷时段，只在你点击时进行。不上报任何数据。",
+      syncHint: "获取官方公布的价格与峰谷时段。不上报任何数据，也不需要账号。",
     },
   };
 

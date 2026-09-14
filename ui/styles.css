@@ -107,8 +107,8 @@ body {
      be a second blur fighting the first one; without it, there is nothing behind to blur. */
 
   /* The window is a fixed 320x470 and `resizable(false)`, and the content is taller than that
-     as soon as the settings panel opens — 812px of content against a 468px card, measured rather
-     than estimated. Without this the overflow was simply cut off by
+     as soon as the settings panel opens — 812px against 468px of card, measured by
+     tools/measure-popover.py. Without this the overflow was simply cut off by
      `html, body { overflow: hidden }`: the price-data row, the "check for updates" button and
      the "restore built-in" button all sat below y=470 and could not be reached at all. The
      whole price-sync feature was invisible, and a missing control does not read as a bug — it

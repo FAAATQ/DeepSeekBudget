@@ -23,7 +23,7 @@ Grab the latest build from the **[Releases page](https://github.com/FAAATQ/DeepS
 
 | Platform | Artifact | Notes |
 |---|---|---|
-| **Windows** | `deepseek-budget.exe` | Portable, **no installer** — run it and the tray icon appears. Needs WebView2, which ships with Windows 11 and current Windows 10. |
+| **Windows** | `deepseek-budget.exe` | Portable, **no installer** — run it and the tray icon appears. Needs WebView2, which ships with Windows 11 and current Windows 10. **The Windows build is not in v0.3.2 yet** — take it from [v0.3.1](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.1) for now. |
 | **macOS** | `DeepSeek Budget.app` | Drag it anywhere and double-click. The build is ad-hoc signed, so the first launch needs **System Settings → Privacy & Security → Open Anyway**. |
 
 Neither platform needs admin rights, and neither installs anything outside its own folder — which
@@ -36,10 +36,11 @@ is also why both can offer a login item.
 - **A tooltip** with the current state, the next change, and the current price. Windows caps tray
   tooltips at 127 characters, so Windows gets a compressed three-line form.
 - **A popover** with today's full schedule, the countdown, and the price table for every model.
-- **Prices that update without a new release.** A **Check for updates** button pulls the latest
-  figures and schedule from a small public config repository — so a price change by DeepSeek does
-  not require this app to ship a new version. The copy bundled in the binary is the fallback, so
-  **the app behaves identically whether or not you ever press it**.
+- **Prices that keep themselves fresh.** A **Check for updates** button — or the automatic check,
+  every 24 hours by default — pulls the latest figures and schedule from a small public config
+  repository, so a price change by DeepSeek does not require this app to ship a new version. The
+  copy bundled in the binary is the fallback, so **the app behaves identically whether or not it
+  ever checks**. Settings shows the interval and when it last ran, and can turn it off entirely.
 - **Launch at login**, off by default. Neither platform needs an installer for this; the entry is
   re-pointed at the app's current location on every launch, so a portable build that gets moved
   keeps working.
@@ -47,10 +48,15 @@ is also why both can offer a login item.
 
 ### Network
 
-There is exactly one outbound request this app can make, and only when you click **Check for
-updates**. No polling, no telemetry, no startup call. The Rust dependency tree contains no HTTP
-client and no TLS stack at all — the single `fetch` runs in the webview, which already has one,
-against a Content-Security-Policy that allows exactly one origin.
+There is exactly one outbound request this app can make, and exactly one origin it can reach. It
+is a plain `GET` for a public JSON file, and it happens in one of two ways: **you press Check for
+updates**, or **the interval you chose in Settings comes round** — 24 hours by default, and only
+while that setting is on. Set it to **Off** and the app goes back to never touching the network on
+its own.
+
+Nothing is ever sent, there is no telemetry, and there is no call at startup. The Rust dependency
+tree contains no HTTP client and no TLS stack at all — the single `fetch` runs in the webview,
+which already has one, against a Content-Security-Policy that allows exactly that one origin.
 
 ## Development
 
@@ -61,7 +67,7 @@ Line Tools (**not** full Xcode).
 npm install                                 # only to get @tauri-apps/cli
 npm run dev                                 # launches; the icon appears in the menu bar
 
-cargo test --workspace                      # 127 tests
+cargo test --workspace                      # 133 tests
 cargo test -p deepseekbudget-schedule       # engine only, ~0.6 s
 
 npx tauri build --bundles app               # macOS .app

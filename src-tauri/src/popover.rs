@@ -263,6 +263,66 @@ pub fn show_at_tray(app: &AppHandle) {
     report_rect_if_asked(&window);
 }
 
+/// Open the popover **hidden** so that its webview exists, and ask it to check for updates.
+///
+/// Why the window has to exist at all: the request is made by the webview's `fetch`, not by Rust
+/// — the Rust tree owns no HTTP client, and the CSP still permits exactly one origin. The popover
+/// is otherwise built lazily on the first tray click, so a user who watches only the menu bar
+/// icon and never opens the panel would never get fresh figures. Creating it hidden is what makes
+/// the scheduled check reach them.
+///
+/// The window is handed back by [`release_after_auto_check`] once the webview reports in, so this
+/// does not turn a menu bar app into one that keeps a browser engine resident.
+pub fn auto_check(app: &AppHandle) {
+    // This runs on the tick thread, and `ensure` is not safe there. Building the window calls
+    // `apply_window_material`, which is AppKit — `NSGlassEffectView` on macOS — and AppKit only
+    // answers on the main thread. Measured: called straight from the tick loop, the window was
+    // created but the material was refused, and the only trace was the stderr line reading
+    // "none available, falling back with an opaque background" where a tray click says
+    // "native glass applied". A silent loss of the panel's entire look, with no error anywhere.
+    //
+    // Hopping costs one turn of the event loop and cannot run before the loop is up, which is
+    // also why this is safe to call from the first tick.
+    let app = app.clone();
+    let _ = app.clone().run_on_main_thread(move || {
+        use tauri::Emitter;
+
+        let Some(window) = ensure(&app) else { return };
+
+        // Set before the emit, not after: the page may already be loaded and collect the flag on
+        // boot instead of ever seeing this event. Whichever path gets there first runs the check.
+        if let Some(core) = app.try_state::<Mutex<AppCore>>() {
+            match core.lock() {
+                Ok(mut core) => core.auto_check_pending = true,
+                Err(poisoned) => poisoned.into_inner().auto_check_pending = true,
+            }
+        }
+
+        // Created hidden and left that way: if the user happens to be looking at the panel, this
+        // must not move it, resize it, or steal focus — it is a request for a network call, not a
+        // reason to interrupt anyone.
+        let _ = window.emit("auto-check", ());
+    });
+}
+
+/// Hand the webview back once the scheduled check has finished.
+///
+/// Only closes a panel the user is not looking at. `close()` destroys the window rather than
+/// hiding it, and that is the point: the next tray click rebuilds it exactly as it always did, so
+/// nothing is resident in between.
+pub fn release_after_auto_check(app: &AppHandle) {
+    // Same main-thread rule as `auto_check`: this command is answered from the webview's IPC
+    // thread, and destroying a window is the same AppKit machinery that created it.
+    let app = app.clone();
+    let _ = app.clone().run_on_main_thread(move || {
+        let Some(window) = app.get_webview_window(LABEL) else { return };
+        if window.is_visible().unwrap_or(true) {
+            return;
+        }
+        let _ = window.close();
+    });
+}
+
 /// Development affordance, sharing `DEEPSEEKBUDGET_REPORT_TRAY_RECT` with the tray: print where the
 /// popover actually ended up.
 ///

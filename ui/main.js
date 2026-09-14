@@ -181,10 +181,40 @@ function renderSettings(data) {
     data.timezoneOverrideMinutes
   );
 
+  renderAutoCheck(data);
+
   $("settings-note").textContent = t(
     "settingsNote",
     zoneText(data.zoneLabel, data.offsetLabel)
   );
+}
+
+/// How often the app goes and looks for new figures by itself.
+///
+/// The choices come from Rust, so the list and the default live in one place rather than being
+/// restated here and drifting. The note distinguishes "nothing has changed" from "it has not
+/// looked" — two facts that would otherwise read identically on a panel whose whole job is to say
+/// how current its numbers are.
+function renderAutoCheck(data) {
+  renderChoiceSelect(
+    $("auto-check-select"),
+    data.autoCheckChoices.map((choice) => ({
+      value: choice.hours,
+      label: choice.label,
+    })),
+    "value",
+    data.autoCheckHours
+  );
+
+  const note = $("auto-check-note");
+  // An ISO date, deliberately: it is a timestamp, and ISO 8601 reads the same in every locale,
+  // whereas anything friendlier would have to be rendered by the engine to stay consistent with
+  // the rest of the panel.
+  note.textContent = data.lastAutoCheck
+    ? t("autoCheckLast", String(data.lastAutoCheck).slice(0, 10))
+    : data.autoCheckHours === 0
+      ? t("autoCheckNote")
+      : t("autoCheckNever");
 }
 
 /// Which copy of the figures is in force, and the state of the buttons that change it.
@@ -334,11 +364,13 @@ async function checkForUpdates() {
         ? t("upToDate")
         : t("updatedTo", after.verifiedAt)
     );
+    return true;
   } catch (error) {
     // Covers every way this fails at once — offline, DNS, a proxy answering with HTML, and
     // every rejection the engine can produce — because from here they are all the same thing:
     // the figures did not change, and here is why.
     setSyncNote(t("updateFailed", messageOf(error)), "bad");
+    return false;
   } finally {
     button.disabled = false;
   }
@@ -427,6 +459,57 @@ $("timezone-select").addEventListener("change", async (event) => {
   await refreshSettings();
 });
 
+$("auto-check-select").addEventListener("change", async (event) => {
+  // Rust refuses an interval it does not offer, so a bad value surfaces as a rejection rather
+  // than silently becoming a different interval than the one this select is about to show.
+  try {
+    await invoke("set_auto_check_hours", { hours: Number(event.target.value) });
+  } catch (error) {
+    setSyncNote(t("updateFailed", messageOf(error)), "bad");
+  }
+  await refreshSettings();
+});
+
+/// The scheduled check, asked for by Rust's tick loop rather than by a click.
+///
+/// Runs the identical path the button runs, then reports back so Rust can record the attempt and
+/// hand the webview back. The report is in a `finally`: **a check that failed still happened**,
+/// and retrying it on the next tick would be exactly the polling this app promised not to do.
+///
+/// `running` guards the two ways this is reached — the boot-time flag and the live event — so a
+/// check that is still in flight is never started a second time underneath itself.
+let autoCheckRunning = false;
+
+async function runAutoCheck() {
+  if (autoCheckRunning) return;
+  autoCheckRunning = true;
+  let ok = false;
+  try {
+    ok = await checkForUpdates();
+  } finally {
+    await invoke("record_auto_check", { ok });
+    await refreshSettings();
+    autoCheckRunning = false;
+  }
+}
+
+/// Collect a check the tick loop asked for before this page existed.
+///
+/// Rust sets a flag when it asks, and emits an event. The event is the path for a panel that is
+/// already open; this is the path for the far more common case, where the tick loop created the
+/// window and asked in the same breath — before `main.js` had run far enough to be listening.
+/// Collecting on boot is what makes the scheduled check land at all; `take_auto_check` clears the
+/// flag, so the two paths together still produce exactly one check.
+async function collectAutoCheck() {
+  try {
+    if (await invoke("take_auto_check")) await runAutoCheck();
+  } catch (error) {
+    setSyncNote(t("updateFailed", messageOf(error)), "bad");
+  }
+}
+
+listen("auto-check", collectAutoCheck);
+
 $("autostart-toggle").addEventListener("click", async () => {
   const button = $("autostart-toggle");
   button.disabled = true;
@@ -479,4 +562,7 @@ listen("open-about", () => {
     error.hidden = false;
     error.textContent = t("unreachable", e);
   }
+  // Outside the `try`, and last: this is the only path by which a panel nobody has opened ever
+  // fetches anything. A failure while drawing the panel must not also swallow the check.
+  await collectAutoCheck();
 })();
