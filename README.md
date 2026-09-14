@@ -19,12 +19,16 @@ The icon is the DeepSeek whale in one of three colours — **blue** off-peak, **
 
 ## Install
 
-Grab the latest build from the **[Releases page](https://github.com/FAAATQ/DeepSeekBudget/releases/latest)**.
+Download the build for your platform:
 
 | Platform | Artifact | Notes |
 |---|---|---|
-| **Windows** | `deepseek-budget.exe` | Portable, **no installer** — run it and the tray icon appears. Needs WebView2, which ships with Windows 11 and current Windows 10. |
-| **macOS** | `DeepSeek Budget.app` | Drag it anywhere and double-click. The build is ad-hoc signed, so the first launch needs **System Settings → Privacy & Security → Open Anyway**. |
+| **Windows** — [v0.3.3](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.3) | `deepseek-budget.exe` | Portable, **no installer** — run it and the tray icon appears. Needs WebView2, which ships with Windows 11 and current Windows 10. |
+| **macOS** — [v0.3.2](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.2) | `DeepSeek Budget.app` | Drag it anywhere and double-click. The build is ad-hoc signed, so the first launch needs **System Settings → Privacy & Security → Open Anyway**. |
+
+**Why two different version numbers?** The macOS packages can only be built on a Mac, and the
+v0.3.3 ones are not up yet. So Mac users get v0.3.2 — it works, but it does **not** contain the
+fixes listed in v0.3.3.
 
 Neither platform needs admin rights, and neither installs anything outside its own folder — which
 is also why both can offer a login item.

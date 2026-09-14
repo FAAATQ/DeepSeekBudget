@@ -17,12 +17,15 @@
 
 ## 安装
 
-从 **[Releases 页面](https://github.com/FAAATQ/DeepSeekBudget/releases/latest)** 下载最新构建。
+按平台下载：
 
 | 平台 | 产物 | 说明 |
 |---|---|---|
-| **Windows** | `deepseek-budget.exe` | 免安装绿色版 —— 直接运行，托盘图标就出现了。依赖 WebView2，Windows 11 与较新的 Windows 10 已内置。 |
-| **macOS** | `DeepSeek Budget.app` | 拖到任何地方双击即可。构建是 ad-hoc 签名的，首次打开需要 **系统设置 → 隐私与安全性 → 仍要打开**。 |
+| **Windows** — [v0.3.3](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.3) | `deepseek-budget.exe` | 免安装绿色版 —— 直接运行，托盘图标就出现了。依赖 WebView2，Windows 11 与较新的 Windows 10 已内置。 |
+| **macOS** — [v0.3.2](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.2) | `DeepSeek Budget.app` | 拖到任何地方双击即可。构建是 ad-hoc 签名的，首次打开需要 **系统设置 → 隐私与安全性 → 仍要打开**。 |
+
+**为什么两个版本号不一样？** macOS 的包只能在 Mac 上构建，v0.3.3 那份还没出。所以 Mac 用户
+拿到的是 v0.3.2 —— 能用，但**不包含** v0.3.3 里的那些修复。
 
 两个平台都不需要管理员权限，也都不在自己目录之外安装任何东西 —— 这也是它们都能提供
 开机自启的原因。
