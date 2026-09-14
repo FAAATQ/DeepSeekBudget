@@ -264,10 +264,12 @@ impl AppCore {
 
     /// Human label for the zone the schedule list is rendered in.
     pub fn zone_label(&self) -> String {
-        if self.settings.timezone_override_minutes.is_some() {
-            return display::render_offset(self.display_offset_minutes());
-        }
-        system_zone_name().unwrap_or_else(|| display::render_offset(self.display_offset_minutes()))
+        zone_label_from(
+            self.settings.timezone_override_minutes,
+            std::env::var_os("TZ").is_some(),
+            system_zone_name(),
+            self.display_offset_minutes(),
+        )
     }
 
     pub fn view(&self) -> StateView {
@@ -429,6 +431,34 @@ fn available_currencies(config: &ProviderConfig) -> Vec<String> {
 
 fn system_offset_minutes() -> i32 {
     Local::now().offset().local_minus_utc() / 60
+}
+
+/// Decide the zone label the panel shows.
+///
+/// A pure function, and it is pure for a reason: the thing it guards against is an environment
+/// variable, and `TZ` is process-global — a test that set it would race every other test in this
+/// binary. Taking it as a `bool` keeps the decision testable without touching the environment.
+///
+/// The bug it exists to prevent: `chrono::Local` reads `TZ`, but the `/etc/localtime` symlink does
+/// not. With `TZ=UTC` on a machine whose system zone is Asia/Shanghai, the figures are rendered at
+/// offset 0 while the label still reads `Asia/Shanghai` — and the panel ends up saying
+/// "now 17:43 · Asia/Shanghai" when it is 01:43 there. The numbers are not wrong; the *label*
+/// claims a zone they are not in, which is worse, because a clock nobody can trust is the one
+/// thing this app cannot afford to be. Measured on this machine, 2026-09-14.
+///
+/// When `TZ` is set the offset is the only part of the pair we can still vouch for, so it is what
+/// gets shown. `system_name` is then ignored rather than second-guessed.
+fn zone_label_from(
+    override_minutes: Option<i32>,
+    tz_in_env: bool,
+    system_name: Option<String>,
+    offset_minutes: i32,
+) -> String {
+    // An explicit choice in Settings is taken at its word, and it sets the offset too.
+    if override_minutes.is_some() || tz_in_env {
+        return display::render_offset(offset_minutes);
+    }
+    system_name.unwrap_or_else(|| display::render_offset(offset_minutes))
 }
 
 /// Best-effort IANA name for the system zone, read from the `/etc/localtime` symlink.
@@ -899,5 +929,32 @@ mod tests {
         assert_eq!(settings.currency, "USD");
         assert_eq!(settings.timezone_override_minutes, Some(540));
         assert_eq!(settings.language, None, "a missing field means 'follow the system'");
+    }
+
+    /// The label and the figures must describe the same zone. They come from two different
+    /// sources, and `TZ` moves only one of them.
+    #[test]
+    fn a_tz_override_never_leaves_the_label_naming_a_zone_the_figures_are_not_in() {
+        let shanghai = || Some("Asia/Shanghai".to_string());
+
+        // The ordinary case, and the reason the name is worth having at all: the symlink names
+        // the zone the offset is already in.
+        assert_eq!(zone_label_from(None, false, shanghai(), 480), "Asia/Shanghai");
+
+        // `TZ=UTC` on a Shanghai machine. Before this was guarded, the label stayed
+        // "Asia/Shanghai" while every figure moved to offset 0 — a self-contradicting clock.
+        assert_eq!(
+            zone_label_from(None, true, shanghai(), 0),
+            "UTC",
+            "the symlink still says Asia/Shanghai; believing it here is the bug"
+        );
+
+        // The Settings override names itself, TZ or no TZ.
+        assert_eq!(zone_label_from(Some(540), false, shanghai(), 540), "UTC+09:00");
+        assert_eq!(zone_label_from(Some(540), true, shanghai(), 540), "UTC+09:00");
+
+        // No symlink to read (Windows): the offset is all there is, and it is correct.
+        assert_eq!(zone_label_from(None, false, None, 480), "UTC+08:00");
+        assert_eq!(zone_label_from(None, false, None, 0), "UTC");
     }
 }

@@ -33,6 +33,14 @@ where the app was quietly saying something untrue.
   like a timezone.** Formatting it overflowed: a debug build panicked, a release build printed
   `UTC--35791394:-8`. The offset is now range-checked during validation, like every other
   untrusted field — the file is not applied and the app keeps running on the built-in schedule.
+- **The clock could name a timezone the figures were not in.** The offset and the zone name came
+  from two sources that do not read the same thing: the offset follows the `TZ` environment
+  variable, while the name is read from the `/etc/localtime` symlink, which does not. With `TZ`
+  set — from a terminal, or `launchctl setenv TZ` — the panel rendered every figure at the `TZ`
+  offset while still labelling them with the system zone, so it could read
+  "now 05:09 · Asia/Shanghai" on a machine where it was 13:09 there. The numbers were not wrong;
+  the label claimed a zone they were not in. When `TZ` is present the offset is now what gets
+  shown. macOS only — Windows has no symlink to misread and was never affected.
 - **A config with an empty weekday list was accepted**, producing a schedule that had no peak hours
   at all — the app would have shown a permanent off-peak price. Now rejected.
 - **The daily price sync could pick up the wrong numbers** from DeepSeek's pricing page. The parser
