@@ -29,10 +29,10 @@ where the app was quietly saying something untrue.
   listening and then never delivered.
 - **Switching language did not refresh the start-at-login row**, leaving it in the previous
   language until the panel was reopened.
-- **A malformed remote config could crash the engine instead of being rejected.** A timezone offset
-  far outside the real range overflowed while being formatted. It is now rejected during
-  validation, like every other untrusted field — the config is not applied and the app keeps
-  running on the built-in schedule.
+- **A price file with an absurd timezone offset was accepted and displayed as a label that looked
+  like a timezone.** Formatting it overflowed: a debug build panicked, a release build printed
+  `UTC--35791394:-8`. The offset is now range-checked during validation, like every other
+  untrusted field — the file is not applied and the app keeps running on the built-in schedule.
 - **A config with an empty weekday list was accepted**, producing a schedule that had no peak hours
   at all — the app would have shown a permanent off-peak price. Now rejected.
 - **The daily price sync could pick up the wrong numbers** from DeepSeek's pricing page. The parser
