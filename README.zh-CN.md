@@ -17,7 +17,7 @@
 
 ## 安装
 
-四份都在 **[v0.3.3](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.3)** 里。
+四份都在 **[v0.3.4](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.4)** 里。
 
 | 平台 | 产物 | 说明 |
 |---|---|---|

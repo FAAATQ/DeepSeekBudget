@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.3.4 — 2026-09-14
+
+### Fixed
+
+- **Off-peak was green in the panel and blue in the menu bar.** One state, two colours. Peak and
+  unknown already agreed; only off-peak had drifted. The panel now uses the same blue as the icon
+  (`#4d6bfe`, the logo's own colour), and the README screenshots were regenerated.
+
+  This was not only an inconsistency. The icon's palette is documented as a deliberate choice —
+  blue against orange is what stays legible with red-green colour blindness — and a green dot
+  sitting next to an orange one is exactly the confusion that pairing was chosen to avoid. The
+  old value quietly undid that decision on the panel's side.
+
+### Added
+
+- **A release workflow.** Pushing a `v*` tag now builds all four artifacts — the Windows `.exe`
+  and the three macOS packages — and attaches them to the release. Until now that meant building
+  the Mac side on a Mac and the Windows side on a PC, and the two genuinely drifted: v0.3.3's
+  Windows build existed hours before the macOS ones, and the README had to carry a paragraph
+  explaining why the download table listed two version numbers. That paragraph is gone.
+
 ## v0.3.3 — 2026-09-14
 
 A review pass over the whole codebase. Nothing new to look at — this release is about the places

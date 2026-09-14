@@ -1,0 +1,102 @@
+name: Build release artifacts
+
+# Why this exists.
+#
+# Two of the four artifacts cannot be produced from a single machine. The Windows `.exe` needs
+# MSVC and WebView2; the macOS `.app` needs Xcode, and the three architecture variants need both
+# Apple targets. Before this workflow, every release meant someone building the Mac side by hand
+# and someone else building the Windows side — and the two could drift, which they did: v0.3.3
+# shipped a Windows build hours before the macOS ones existed, and the README had to carry a
+# paragraph explaining that the download table listed two different version numbers.
+#
+# Both jobs attach to the same release, so a tag produces all four artifacts with nothing in
+# between to forget.
+#
+# Manual runs take a tag that already exists. Pushing a `v*` tag does the same thing without the
+# input. Nothing is built on ordinary pushes to `main` — this is a release tool, not a CI check.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and attach to (e.g. v0.3.4). It must already exist."
+        required: true
+  push:
+    tags:
+      - "v*"
+
+# `contents: write` is what lets the job attach assets to a release. Without it `gh release
+# upload` fails with a 403 that reads like a permissions problem on the release rather than on
+# the token.
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # No `npm install`: the Tauri CLI is not involved. `cargo build` on the `src-tauri` crate
+      # runs `tauri-build`, which embeds the committed `ui/` files. That is the same command the
+      # README gives, so a local build and this one take the same path.
+      - name: Build the portable exe
+        run: cargo build --release -p deepseek-budget
+
+      - name: Attach it to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag || github.ref_name }}"
+          exe="target/release/deepseek-budget.exe"
+          [ -f "$exe" ] || { echo "::error::$exe was not produced"; exit 1; }
+          echo "built $exe ($(stat -c%s "$exe") bytes)"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "$tag" --generate-notes
+          gh release upload "$tag" "$exe" --clobber
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # The icon pipeline (`npm run icons`) is deliberately not run here. It needs Chrome, and
+      # `src-tauri/icons/` is committed — regenerating it on every release would be a way to
+      # ship a different icon than the one that was reviewed.
+      - run: npm ci
+
+      - name: Build all three flavours
+        run: |
+          set -euo pipefail
+          npx tauri build --bundles app
+          npx tauri build --target x86_64-apple-darwin --bundles app
+          npx tauri build --target universal-apple-darwin --bundles app
+
+      - name: Zip them the way the README describes
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ditto -c -k --keepParent "target/release/bundle/macos/DeepSeek Budget.app"                          dist/deepseek-budget-macos-arm64.zip
+          ditto -c -k --keepParent "target/x86_64-apple-darwin/release/bundle/macos/DeepSeek Budget.app"     dist/deepseek-budget-macos-x86_64.zip
+          ditto -c -k --keepParent "target/universal-apple-darwin/release/bundle/macos/DeepSeek Budget.app"  dist/deepseek-budget-macos-universal.zip
+          for z in dist/*.zip; do echo "$z $(stat -f%z "$z") bytes"; done
+
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag || github.ref_name }}"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "$tag" --generate-notes
+          gh release upload "$tag" dist/*.zip --clobber

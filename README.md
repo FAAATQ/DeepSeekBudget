@@ -19,7 +19,7 @@ The icon is the DeepSeek whale in one of three colours — **blue** off-peak, **
 
 ## Install
 
-All four builds are in **[v0.3.3](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.3)**.
+All four builds are in **[v0.3.4](https://github.com/FAAATQ/DeepSeekBudget/releases/tag/v0.3.4)**.
 
 | Platform | Artifact | Notes |
 |---|---|---|
