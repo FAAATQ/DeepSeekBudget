@@ -147,6 +147,20 @@ def stub_settings(view):
             {"tag": "zh", "label": "中文"},
             {"tag": "en", "label": "English"},
         ],
+        # The third tool to be caught by this same drift, after `measure-popover.py` and
+        # `check-update-path.py`: a hand-copied mirror of `core::SettingsView` that nobody updates
+        # when the real one grows a field. `main.js` then calls `.map` on an absent array, the page
+        # throws while rendering, and what comes out is a screenshot of the error banner — which is
+        # exactly what happened, twice, before anyone looked at the picture.
+        "autoCheckHours": 24,
+        "autoCheckChoices": [
+            {"hours": 0, "label": "Off"},
+            {"hours": 6, "label": "Every 6 hours"},
+            {"hours": 12, "label": "Every 12 hours"},
+            {"hours": 24, "label": "Every 24 hours"},
+            {"hours": 72, "label": "Every 3 days"},
+        ],
+        "lastAutoCheck": None,
     }
 
 

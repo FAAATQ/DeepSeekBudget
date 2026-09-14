@@ -41,6 +41,11 @@ where the app was quietly saying something untrue.
   "now 05:09 · Asia/Shanghai" on a machine where it was 13:09 there. The numbers were not wrong;
   the label claimed a zone they were not in. When `TZ` is present the offset is now what gets
   shown. macOS only — Windows has no symlink to misread and was never affected.
+- **The panel showed off-peak in green while the menu bar icon showed it in blue.** Same state,
+  two colours — and the icon's palette was chosen deliberately: blue against orange is the pair
+  that stays readable with red-green colour blindness, and a green dot beside an orange one is
+  exactly the confusion that choice avoided. The panel now uses the icon's blue (`#4d6bfe`, taken
+  from the logo itself). The README screenshots were regenerated.
 - **A config with an empty weekday list was accepted**, producing a schedule that had no peak hours
   at all — the app would have shown a permanent off-peak price. Now rejected.
 - **The daily price sync could pick up the wrong numbers** from DeepSeek's pricing page. The parser

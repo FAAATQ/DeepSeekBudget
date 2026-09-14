@@ -39,7 +39,17 @@
   --faint: #97979d;
   --line: rgba(0, 0, 0, 0.09);
   --hover: rgba(0, 0, 0, 0.05);
-  --offpeak: #34c759;
+  /* The three state colours, and they must be the *same three* the tray icon uses
+     (`tools/make-tray-icons.py`) — the icon and the panel describe one state between them, so a
+     state that is blue in the menu bar and green in the panel is two answers to one question.
+     That is what this used to do: off-peak was `#34c759` here and `#4d6bfe` there, while peak and
+     unknown already matched.
+
+     Blue is also the brand colour — it is lifted straight out of the logo SVG — and, more to the
+     point, blue-against-orange is what makes the pair legible to red-green colour blindness.
+     A green dot next to an orange one is precisely the confusion that pairing was chosen to
+     avoid, so the old value undid an accessibility decision from the icon side. */
+  --offpeak: #4d6bfe;
   --peak: #ff9500;
   --unknown: #8e8e93;
   --accent: #0008ff;
