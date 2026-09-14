@@ -18,7 +18,7 @@
 
 **⚠️ 代价：硬约束 5 第二次放宽**
 
-原来那条是「网络只能有一个口子，**且必须由用户点击触发**」。现在触发者变成了「点击，**或用户设定好的间隔**」—— 这个 app 会在你没操作的时候发一次请求，而它此前明确承诺过不会。缓解措施是默认一天一次、界面上写得清楚、随时能关，**但代价是真的**，完整记录见 [architecture.md §7](docs/design/architecture.md)。请求仍然只是 `GET` 一个公开 JSON，**不上报任何数据、没有遥测**，CSP 仍然只放行一个域名。
+原来那条是「网络只能有一个口子，**且必须由用户点击触发**」。现在触发者变成了「点击，**或用户设定好的间隔**」—— 这个 app 会在你没操作的时候发一次请求，而它此前明确承诺过不会。缓解措施是默认一天一次、界面上写得清楚、随时能关，**但代价是真的**。请求仍然只是 `GET` 一个公开 JSON，**不上报任何数据、没有遥测**，CSP 仍然只放行一个域名。
 
 **实现上踩到的两个坑**（写下来是因为它们都没报错）
 
@@ -40,7 +40,7 @@
 
 **打包后的 `.app` 也单独跑过一遍**（不是只有 debug 构建）：同样三项全过。
 
-**云端**：cron 定时触发实测跑通（把间隔临时压到 5 分钟验的，见 [CLAUDE.md](CLAUDE.md) 的验证纪律），在 GitHub 的网络上跑完整链路并正确判定「无变化、不开 PR」。合并 → purge → CDN 那条链也在 2026-09-14 第一次完整走通。
+**云端**：cron 定时触发实测跑通（把间隔临时压到 5 分钟验的），在 GitHub 的网络上跑完整链路并正确判定「无变化、不开 PR」。合并 → purge → CDN 那条链也在 2026-09-14 第一次完整走通。
 
 测试 127 → **133**。
 
@@ -51,7 +51,7 @@
 **改名**
 
 - 产品名 `API Budget` → **`DeepSeek Budget`**。连带改的一共 30 个文件：`productName`、bundle identifier（`com.aicoworks.apibudget` → `com.aicoworks.deepseekbudget`）、Cargo / npm 包名（`api-budget` → `deepseek-budget`、`apibudget-schedule` → `deepseekbudget-schedule`）、二进制名，以及四个开发设施的环境变量前缀（`APIBUDGET_*` → `DEEPSEEKBUDGET_*`）
-- ⚠️ **代价**：identifier 一改，**旧的登录项就成了孤儿**（macOS 留下的 `~/Library/LaunchAgents/com.aicoworks.apibudget.plist`）。这正是 [architecture.md §9](docs/design/architecture.md) 早就写下的那条耦合 —— 写的时候是推演，这次真的踩到了
+- ⚠️ **代价**：identifier 一改，**旧的登录项就成了孤儿**（macOS 留下的 `~/Library/LaunchAgents/com.aicoworks.apibudget.plist`）。这正是早先写下的那条耦合 —— 写的时候是推演，这次真的踩到了
 
 **修复**
 
@@ -89,9 +89,9 @@
 
 **沉淀**
 
-- 新增 [docs/platforms/macos.md](docs/platforms/macos.md)，与 windows.md 对称
-- [verification.md](docs/practice/verification.md) 新增 4.4 / 4.5 两节：半透明 UI 的边界**必须做对照**、位置**要问不要假设**
-- [retrospective.md](docs/practice/retrospective.md) 新增第 21–24 条
+- 新增 [docs/macos.md](docs/macos.md)，与 windows.md 对称
+- 验证方法论新增两节：半透明 UI 的边界**必须做对照**、位置**要问不要假设**
+- 复盘记录新增第 21–24 条
 
 **仍未验证**：免安装 exe 在**干净机器**上的 WebView2 依赖；两端开机自启的「**登录时真的会跑**」那一跳
 
@@ -109,13 +109,13 @@
 - 新增 `src-tauri/src/autostart.rs`。平台无关的部分是三个**纯函数**（Windows 命令串、LaunchAgent plist、`plan`/`reconcile_action` 的判定），因此能在没有 macOS 的机器上被断言 —— 和 `panel_origin` 同一个套路
 - **没有引入官方插件**（`tauri-plugin-autostart` → `auto-launch 0.5.0`）：它写 Windows 注册表时**不给路径加引号**（带参数必失败），macOS 的 `is_enabled()` 只判断 plist **文件在不在**、不比对里面的路径 —— 而后者正是绿色包最需要的那半个语义。依赖增量也更大（会带进第二个 `winreg`）
 - 硬约束新增第 9 条：**登录项只能由用户手势创建，`reconcile` 只维护已经存在的那一条**；Windows 的 `StartupApproved\Run` **只读不写**
-- 依赖树上**只多一个 `winreg`，而它在锁文件里本来就有**（`embed-resource` 带进来的）。capabilities 与 CSP 都没动 —— [verification.md §6](docs/practice/verification.md) 那条「Rust 侧零网络」的结构性证伪在新代码下依然成立
+- 依赖树上**只多一个 `winreg`，而它在锁文件里本来就有**（`embed-resource` 带进来的）。capabilities 与 CSP 都没动 —— 那条「Rust 侧零网络」的结构性证伪在新代码下依然成立
 
 **验证**：124 个测试全绿（90 引擎 + 33 应用 + 1 文档，比上一轮 +11，全部是纯函数断言）。Windows 上实测：注册表值的内容与引号、被移动后的自愈、被任务管理器关掉时如实报告、以及**把那条命令行原样跑起来确实拉起了托盘图标**（app 自报 `centre=(2234,1416)`，按颜色找图标报 `centre=(2233,1415)` —— 两个独立方法对上）。
 
 其中一条是**验证过程中反过来改掉代码的**：`StartupApproved\Run` 的判定最初照抄 `auto-launch 0.5.0`（看末尾 8 字节是否为零），而本机 `Docker Desktop` 那条真实的禁用记录是 `03 00 00 00` + **全零**时间戳 —— 那个规则会把它读成「开着」。改成看状态字（`02` 开 / `03` 关）后，四个实物形态成了单元测试。
 
-**仍未验证**：**「登录时真的会跑」这一跳** —— 写进去的东西是可执行的，但没注销/重启过；**macOS 侧的全部运行时行为**（本机没有 Mac，那段胶水只做到编译过）。两条都在 [verification.md §7](docs/practice/verification.md) 里。
+**仍未验证**：**「登录时真的会跑」这一跳** —— 写进去的东西是可执行的，但没注销/重启过；**macOS 侧的全部运行时行为**（本机没有 Mac，那段胶水只做到编译过）。
 
 ---
 
@@ -127,7 +127,7 @@
 - **验证设施三件套**：`tools/measure-popover.py`（量布局）、`tools/corner-profile.ps1`（量圆角轮廓）、`tools/diff-region.ps1`（两次截图求差）
 
 **架构变更**
-- **「零网络」硬约束被修订为「只有一个口子，且必须由用户点击触发」**。Rust 侧仍然零网络（依赖树无 HTTP 客户端 / TLS 栈），`fetch` 走前端 webview。完整理由与代价见 [architecture.md §7](docs/design/architecture.md)
+- **「零网络」硬约束被修订为「只有一个口子，且必须由用户点击触发」**。Rust 侧仍然零网络（依赖树无 HTTP 客户端 / TLS 栈），`fetch` 走前端 webview。
 - 新增 `crates/schedule/src/validate.rs`（远程配置的纯校验）与 `src-tauri/src/provider.rs`（同步副本读写 + `UPDATE_URL`）
 - 新增 `crates/schedule/examples/view.rs`：把一份真实 `StateView` 打成 JSON，供验证工具当输入
 
@@ -143,7 +143,7 @@
 
 **验证**：113 个测试全绿（90 引擎 + 22 应用 + 1 文档）；`check-update-path.py` 用真实 CSP + 真实 URL + 真实前端跑通整条同步链路；托盘点击链路改由 `tray.rect()` 取坐标后一次到位。
 
-**仍未验证**：真实菜单栏图标观感、液态玻璃观感（同上，见 [verification.md §7](docs/practice/verification.md)）、免安装 exe 在**干净机器**上的 WebView2 依赖。
+**仍未验证**：真实菜单栏图标观感、液态玻璃观感（同上）、免安装 exe 在**干净机器**上的 WebView2 依赖。
 
 ---
 
@@ -162,7 +162,7 @@
 - 画布从正方形改为跟随 logo 宽高比的 **49×36**，鲸鱼在菜单栏里高 **17.0pt**（正方形画布只能到 12.6pt，**大 1.35 倍**）
 
 **修正**
-- **图标导出流水线**：去掉 8× 超采样 + `sips` 缩小，改为**直接渲染到最终尺寸**。墨量 +4%、实心像素 +10%、糊边像素 −20%（[实测表](docs/design/icon-pipeline.md)）
+- **图标导出流水线**：去掉 8× 超采样 + `sips` 缩小，改为**直接渲染到最终尺寸**。墨量 +4%、实心像素 +10%、糊边像素 −20%（[实测表](docs/icon-pipeline.md)）
 - **画布对齐 bug**：`MARGIN` 原本只在右下生效（实测边距 `L0 R2 T0 B2`），SVG 改为 flex 居中后为 `L1 R1 T1 B1`
 - README 里无法复核的「大了 44%」改为可复核的「1.35 倍」
 - 清理「绿点」时代的过期表述（README / `tray.rs` 注释 / 脚本 docstring）

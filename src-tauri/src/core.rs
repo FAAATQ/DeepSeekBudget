@@ -52,11 +52,15 @@ pub struct Settings {
     ///
     /// Defaults to 24. The figures are published by someone else, and going stale is the one
     /// failure this app exists to prevent — so the app goes and looks, rather than waiting to be
-    /// asked. This is a deliberate revision of hard constraint 5, which used to read "only a user
-    /// click sends a request". **Its structural half is untouched**: the request still goes
-    /// through the webview's `fetch`, the Rust tree still contains no HTTP client, and the CSP
-    /// still permits exactly one origin. What changed is who decides *when*. See
-    /// docs/design/architecture.md §7 for the cost that was accepted.
+    /// asked. This is a deliberate revision of an earlier promise: this app used to send a
+    /// request **only** when the user clicked. **Its structural half is untouched** — the request
+    /// still goes through the webview's `fetch`, the Rust tree still contains no HTTP client, and
+    /// the CSP still permits exactly one origin. What changed is who decides *when*.
+    ///
+    /// The cost, stated plainly: the app now makes a request the user did not ask for at that
+    /// moment. It is bounded (one request per interval, to one origin), it is visible (the
+    /// settings panel names the interval and when the last check ran), and it can be turned off —
+    /// but "no background traffic at all" is no longer true, and the README says so.
     #[serde(default = "default_auto_check_hours")]
     pub auto_check_hours: u32,
     /// When the last automatic check finished, as RFC 3339. `None` means never — and never
